@@ -1,4 +1,5 @@
 import { drawNetherEffects } from './nether-creature-art.js?v=living-worlds-1';
+import { drawDragon, drawDragonCloud, drawDragonWarning } from './dragon-art.js?v=dragon-flight-1';
 import { configureBoard } from './display.js';
 import { performanceAge } from './guitar.js?v=encore-1';
 import { drawHero, drawBeast } from './actors-art.js?v=living-worlds-1';
@@ -121,6 +122,42 @@ function groundShadow(c,level,hero,camera) {
   c.restore();
 }
 
+function drawEndEncounter(c, dragon, camera, time) {
+  if (!dragon) return;
+  const progress = Math.min(1, dragon.age / dragon.duration);
+  for (const spot of dragon.targets) {
+    const x = spot.x - camera;
+    if (!spot.released && x > -spot.radius && x < WIDTH + spot.radius) {
+      drawDragonWarning(c,x,spot.y-spot.height/2,spot.radius,spot.height/2,
+        dragon.phase === 'warning' ? progress : 1,time);
+    }
+  }
+  for (const cloud of dragon.clouds) {
+    const x = cloud.x - camera;
+    if (x > -cloud.radius && x < WIDTH + cloud.radius) {
+      drawDragonCloud(c,x,cloud.y-cloud.height/2,cloud.radius,cloud.height/2,cloud.age,cloud.duration,cloud.x);
+    }
+  }
+  const x = dragon.x-camera;
+  if (x < -55 || x > WIDTH+55) return;
+  let fold = 0, breath = 0, target;
+  if (dragon.phase === 'warning') {
+    fold = progress ** 2 * .65;
+    breath = progress ** 2 * .6;
+  } else if (dragon.phase === 'dive') {
+    fold = .65 + .3 * Math.sin(Math.PI * progress);
+    breath = .6 + .4 * Math.min(1, progress*2);
+  } else if (dragon.phase === 'recover') {
+    fold = .65 * (1-progress) ** 2;
+  }
+  const drop = dragon.clouds.at(-1);
+  if (drop && drop.age < .23 && (dragon.phase === 'dive' || dragon.phase === 'recover')) {
+    target = {x:drop.x-camera, y:drop.y-drop.height*.64};
+    breath = Math.max(.05, 1-(drop.age/.23)**3);
+  }
+  drawDragon(c,{x,y:dragon.y,dir:dragon.dir,pitch:dragon.pitch,dive:fold,breath,time,scale:1.12},target);
+}
+
 export function drawRun(canvas,state) {
   const c=configureBoard(canvas,WIDTH,HEIGHT),level=state.level,hero=state.player;
   c.imageSmoothingEnabled=true;
@@ -139,6 +176,7 @@ export function drawRun(canvas,state) {
     if(!item.taken && item.x>camera-9 && item.x<camera+WIDTH+9) gem(c,item.x-camera,item.y,time);
   }
   if (level.id === 'nether') drawNetherEffects(c,state,camera,WIDTH);
+  drawEndEncounter(c,state.dragon,camera,time);
   drawWarnings(c,state.enemies,camera,WIDTH);
   drawMonsterEffects(c,state.monsterEffects,camera,WIDTH);
   for(const actor of state.enemies) enemy(c,actor,camera,state);

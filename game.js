@@ -1,6 +1,6 @@
 import { LEVELS } from './levels.js?v=living-worlds-1';
-import { createRun } from './physics.js?v=living-worlds-1';
-import { drawRun } from './renderer.js?v=living-worlds-1';
+import { createRun } from './physics.js?v=dragon-flight-1';
+import { drawRun } from './renderer.js?v=dragon-flight-1';
 import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
 import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
 
@@ -318,6 +318,7 @@ byId('help').addEventListener('click', () => {
   setText(byId('help-power'), heroes[heroId].tip);
   const tips = [...new Set(level.enemies.map(enemy => enemy.type))]
     .map(type => monsterTips[type]).filter(Boolean);
+  if (level.id === 'end') tips.push('Дракон Края складывает крылья и пикирует к розовым меткам. Выбеги за метки до выдоха или перепрыгни облако. Дыхание рассеивается за три секунды.');
   setText(byId('help-monsters'), tips.join(' '));
   byId('help-monsters').hidden = tips.length === 0;
   continueAfterHelp = phase === 'playing';

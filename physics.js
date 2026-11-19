@@ -1,5 +1,6 @@
 import { LEVELS } from './levels.js?v=living-worlds-1';
 import { advanceAction, advanceMonsterEffects, interruptAction } from './enemy-actions.js?v=living-worlds-1';
+import { createDragon, advanceDragon } from './dragon-rules.js?v=dragon-flight-1';
 
 const RUN_SPEED = 132;
 const JUMP_SPEED = 322;
@@ -34,6 +35,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   const player = { ...level.spawn, w: PLAYER_W, h: PLAYER_H, vx: 0, vy: 0, facing: 1, onGround: true };
   const state = {
     level, heroId, player, lives: 3, collected: 0, cooldown: 0, time: 0, status: 'playing',
+    dragon: createDragon(level, player),
     gems: level.gems.map(g => ({ ...g, taken: false })), enemies: level.enemies.map(spawnEnemy),
     monsterEffects: [], checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null, guitarStartedAt: null,
   };
@@ -56,6 +58,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     const spawn = state.checkpointReached
       ? { x: level.checkpoint.x - PLAYER_W/2, y: level.checkpoint.y - PLAYER_H } : level.spawn;
     Object.assign(player,spawn,{ vx: 0, vy: 0, onGround: true, facing: 1 });
+    state.dragon = createDragon(level, player);
     state.invulnerable = 1.6;
     coyote = jumpBuffer = 0;
   }
@@ -165,7 +168,8 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
         return;
       }
     }
-    if (advanceMonsterEffects(state,dt,protectedByPower || state.invulnerable > 0)) loseLife();
+    const protectedPlayer = protectedByPower || state.invulnerable > 0;
+    if (advanceMonsterEffects(state,dt,protectedPlayer) || advanceDragon(state,dt,protectedPlayer)) loseLife();
   }
 
   function step(dt,input) {
