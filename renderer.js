@@ -102,21 +102,81 @@ function figure(c,atlas,id,actor,frame,cam) {
   }
 }
 
+const guitarPixels=[
+  '...............qs', '..............qtq', '.............qcs.',
+  '.....qqq....qcsq.', '..qqqtrrqq.qcsq..', '.qtrrrhrrqqcsq...',
+  'qtrwhhhrrqcsq....', 'qtrrrhrrscsq.....', 'qtbbrsrrrqq......',
+  '.qrbbrrqq........', '..qrrrq..........', '...qqq...........',
+];
+const guitarInks={q:'#312337',r:'#dc634b',t:'#ffa572',h:'#592d36',s:'#fff2be',c:'#ab784e',w:'#fff2cb',b:'#94423e'};
+let guitarImage;
+
+function drawGuitar(c,x,y,age,facing) {
+  if(!guitarImage) {
+    guitarImage=document.createElement('canvas');
+    guitarImage.width=guitarPixels[0].length;
+    guitarImage.height=guitarPixels.length;
+    const pixels=guitarImage.getContext('2d');
+    guitarPixels.forEach((row,py)=>{
+      for(let px=0;px<row.length;px++) {
+        const ink=guitarInks[row[px]];
+        if(ink) rect(pixels,ink,px,py,1,1);
+      }
+    });
+  }
+  c.save();
+  c.translate(x,y); c.scale(facing,1);
+  c.drawImage(guitarImage,-6,-6);
+  const strum=Math.floor(age*9)%2;
+  rect(c,'#cf956e',-3,1-strum*2,3,2);
+  rect(c,'#f7cf9f',-2,2-strum*2,3,1);
+  rect(c,'#f7cf9f',5,-2,2,2);
+  c.restore();
+}
+
+function musicNote(c,x,y,color) {
+  const outline='#302238';
+  rect(c,outline,x+2,y,5,4);
+  rect(c,outline,x+2,y+3,3,4);
+  rect(c,outline,x-1,y+5,5,4);
+  rect(c,color,x+3,y+1,1,6);
+  rect(c,color,x+4,y+1,2,2);
+  rect(c,color,x,y+6,3,2);
+}
+
+function drawSoundWave(c,solo,camera) {
+  const alpha=Math.max(0,Math.min(1,(.93-solo.age)/.33));
+  if(!alpha) return;
+  const x=solo.x-camera, y=solo.y, radius=solo.front;
+  // Pixel dashes preserve the view of the platforms through the expanding wave.
+  const count=Math.max(16,Math.round(radius*.75));
+  c.save();
+  c.globalAlpha=alpha*.78;
+  for(let i=0;i<count;i++) {
+    const angle=2*Math.PI*i/count;
+    const dx=Math.cos(angle)*radius, dy=Math.sin(angle)*radius;
+    rect(c,'#354249',x+dx,y+dy,3,3);
+    rect(c,'#a3ead6',x+dx,y+dy,2,2);
+  }
+  c.globalAlpha=alpha;
+  for(const side of [-1,1]) {
+    for(const [angle,color] of [[-.80,'#b3f5dc'],[-.19,'#ffc1dc']]) {
+      const nx=x+side*radius*Math.cos(angle);
+      musicNote(c,nx-2,y+radius*Math.sin(angle)-5,color);
+    }
+  }
+  c.restore();
+}
+
 function playerEffects(c,s,cx,cy,front) {
   if(s.abilityTime<=0) return;
   const dir=s.player.facing||1;
   if(!front && s.heroId==='kirill') {
     for(let i=0;i<3;i++) rect(c,i ? '#67c6c5':'#c9ffeb',cx-dir*(11+i*4),cy-6+i*3,5-i,1);
-  } else if(!front && s.heroId==='pasha') {
-    // A pair of vertical wind trails follows his feet until the high jump lands.
-    const foot=Math.round(s.player.y+s.player.h);
-    const pulse=Math.floor(s.time*8)%3, height=s.player.vy<0 ? 11 : 6;
-    for(const dx of [-5,4]) {
-      rect(c,'#69cfc1',cx+dx,foot+1,2,height-pulse);
-      rect(c,'#d6fff0',cx+dx,foot+1,1,3);
-      rect(c,'#8ae5cd',cx+dx*1.5,foot+height+pulse,2,2);
-    }
-    rect(c,'#e2ffca',cx-dir*2,foot+height+4-pulse,2,2);
+  } else if(front && s.solo) {
+    drawGuitar(c,cx,cy,s.solo.age,dir);
+    const rise=Math.floor(s.solo.age*12)%7;
+    musicNote(c,cx+dir*11-2,cy-17-rise,'#ffbdda');
   } else if(front && s.heroId==='maxim') {
     const x=cx+dir*11;
     rect(c,'#ffe3a2',x,cy-6,3,7); rect(c,'#ffc270',x+dir*3,cy-4,2,5);
@@ -143,9 +203,23 @@ function enemy(c,atlas,actor,cam,time) {
   rect(c,'rgba(23,23,34,.35)',cx-actor.w*.4,floor-1,Math.round(actor.w*.8),2);
   c.save();
   if(actor.stun>0) c.globalAlpha=.66;
-  figure(c,atlas,actor.type,actor,pose(actor),cam);
+  let frame=pose(actor);
+  if(actor.dance>0) {
+    // Sway around the feet with a small hop on each beat; physics stays in world coordinates.
+    const beat=Math.sin(actor.dance*11);
+    const foot=Math.round(actor.y+actor.h);
+    c.translate(cx+Math.round(beat*2),foot-Math.round(Math.abs(beat)*4));
+    c.transform(1,0,beat*.11,1,0,0);
+    c.translate(-cx,-foot);
+    frame=beat>0 ? 1 : 2;
+  }
+  figure(c,atlas,actor.type,actor,frame,cam);
   c.restore();
-  if(actor.stun>0) {
+  if(actor.dance>0) {
+    const beat=Math.floor(actor.dance*4);
+    const rise=Math.floor(actor.dance*12)%4;
+    musicNote(c,cx+(beat%2 ? 4 : -7),Math.max(1,y-16-rise),'#ffc1dc');
+  } else if(actor.stun>0) {
     const d=Math.floor(time*5)%3;
     rect(c,'#ffe998',cx-5+d,y-3,3,1); rect(c,'#ffe998',cx+3-d,y-4,2,2);
   }
@@ -161,6 +235,7 @@ export function drawRun(canvas,state) {
   const scene=sceneFor(canvas,level);
   drawLandscape(c,t,scene,level,camera);
   drawDepth(c,level,camera,time,WIDTH,HEIGHT);
+  if(state.solo) drawSoundWave(c,state.solo,camera);
   c.drawImage(scene.terrain,camera,0,WIDTH,HEIGHT,0,0,WIDTH,HEIGHT);
   const post=level.checkpoint, end=level.flag;
   if(post.x>=camera-12 && post.x<camera+WIDTH+12) checkpoint(c,Math.round(post.x-camera),post.y,state.checkpointReached,time);

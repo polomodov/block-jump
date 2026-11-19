@@ -2,9 +2,9 @@ import { LEVELS } from './levels.js';
 
 const RUN_SPEED = 132;
 const JUMP_SPEED = 322;
-const VAULT_SPEED = 440;
 const GRAVITY = 830;
 const PLAYER_W = 13, PLAYER_H = 19;
+const FIRST_CHORD = 26, SOLO_RADIUS = 120, WAVE_DURATION = .6;
 
 // Width, height and patrol speed are in logical pixels and pixels per second.
 // Hoppers spring from the bank. Flying creatures keep a little space below them.
@@ -14,8 +14,7 @@ const beasts = {
   magma_cube: [16,12,23,'hop'], blaze: [13,16,20,'float'], ghost: [14,15,25,'float'],
   pumpkin_guard: [16,18,21], enderman: [13,21,30], shulker: [15,13,0],
 };
-// Two seconds covers a vault falling all the way across the screen. A landing ends it sooner.
-const powers = { kirill: 4, maxim: .35, mom: 4, dad: 3, pasha: 2 };
+const powers = { kirill: 4, maxim: .35, mom: 4, dad: 3, pasha: 1.2 };
 const overlaps = (a, b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
 const approaches = (value, target, delta) => value < target ? Math.min(target,value+delta) : Math.max(target,value-delta);
 const remaining = (value,dt) => value <= dt+1e-8 ? 0 : value-dt;
@@ -25,7 +24,7 @@ function spawnEnemy(def, index) {
   const hover = motion === 'float' ? 14 : 0;
   return { ...def, y: def.y-h-hover, baseY: def.y-h, w, h, speed, motion,
     vx: index%2 ? speed : -speed, facing: index%2 ? 1 : -1,
-    phase: index*.53, alive: true, stun: 0 };
+    phase: index*.53, alive: true, stun: 0, dance: 0 };
 }
 
 export function createRun(levelId = 'temple', heroId = 'kirill') {
@@ -35,15 +34,15 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   const state = {
     level, heroId, player, lives: 3, collected: 0, cooldown: 0, time: 0, status: 'playing',
     gems: level.gems.map(g => ({ ...g, taken: false })), enemies: level.enemies.map(spawnEnemy),
-    checkpointReached: false, invulnerable: 0, abilityTime: 0,
+    checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null,
   };
   let coyote = 0, jumpBuffer = 0, heldJump = false, heldAbility = false;
-  let vaultAssist = 0;
 
   function loseLife() {
     state.lives--;
     state.abilityTime = 0;
-    vaultAssist = 0;
+    state.solo = null;
+    for (const enemy of state.enemies) enemy.dance = 0;
     if (state.lives === 0) {
       state.status = 'lost';
       return;
@@ -56,12 +55,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   }
 
   function movePlayer(dt, input) {
-    let dir = Number(!!input.right) - Number(!!input.left);
-    if (input.left || input.right) vaultAssist = 0;
-    if (vaultAssist > 0) {
-      dir = player.facing;
-      vaultAssist = remaining(vaultAssist,dt);
-    }
+    const dir = Number(!!input.right) - Number(!!input.left);
     const boost = heroId === 'kirill' && state.abilityTime > 0;
     player.vx = approaches(player.vx,dir*(boost ? 184 : RUN_SPEED),dt*(dir ? 1060 : 1370));
     if (dir) player.facing = dir;
@@ -120,17 +114,36 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     }
   }
 
-  function enemies(dt, previousFeet) {
+  // Music spreads from where Pasha played the first chord, even as he runs on.
+  function advanceSolo(dt) {
+    const solo = state.solo;
+    if (!solo) return null;
+    const spreading = solo.age < WAVE_DURATION - 1e-8;
+    solo.age += dt;
+    solo.front = FIRST_CHORD + (solo.radius - FIRST_CHORD) * Math.min(1, solo.age / WAVE_DURATION);
+    return spreading ? solo : null;
+  }
+
+  function enemies(dt, previousFeet, wave) {
     const active = state.abilityTime > 0;
     const protectedByPower = active && (heroId === 'dad' || heroId === 'mom');
     for (const enemy of state.enemies) {
       if (!enemy.alive) continue;
+      enemy.dance = remaining(enemy.dance,dt);
+      if (wave && enemy.dance === 0) {
+        const dx = enemy.x+enemy.w/2-wave.x, dy = enemy.y+enemy.h/2-wave.y;
+        if (Math.hypot(dx,dy) <= wave.front + 1e-8) {
+          enemy.dance = 5;
+          enemy.vx = 0;
+        }
+      }
+      if (enemy.dance > 0) continue;
       moveEnemy(enemy,dt,active && heroId === 'dad');
       if (active && heroId === 'maxim' &&
           Math.abs(enemy.x+enemy.w/2-player.x-player.w/2) < 34 && Math.abs(enemy.y-player.y) < 24) {
         enemy.stun = 4;
       }
-      if (enemy.stun > 0 || (heroId === 'pasha' && active) || !overlaps(player,enemy)) continue;
+      if (enemy.stun > 0 || !overlaps(player,enemy)) continue;
       if (player.vy > 0 && previousFeet <= enemy.y+4) {
         enemy.alive = false;
         player.y = enemy.y-player.h;
@@ -149,10 +162,6 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     state.invulnerable = remaining(state.invulnerable,dt);
     state.cooldown = remaining(state.cooldown,dt);
     const previousFeet = movePlayer(dt,input);
-    if (heroId === 'pasha' && player.onGround) {
-      state.abilityTime = 0;
-      vaultAssist = 0;
-    }
     if (player.y > level.height+20) {
       loseLife();
       return;
@@ -169,25 +178,23 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       state.status = 'won';
       return;
     }
-    enemies(dt,previousFeet);
+    const wave = advanceSolo(dt);
+    enemies(dt,previousFeet,wave);
     state.abilityTime = remaining(state.abilityTime,dt);
+    if (!state.abilityTime) state.solo = null;
   }
 
   function update(dt,input = {}) {
     if (state.status !== 'playing' || !Number.isFinite(dt) || dt <= 0) return;
     if (input.jump && !heldJump) jumpBuffer = .14;
-    if (!input.jump && heldJump && player.vy < -154 && !(heroId === 'pasha' && state.abilityTime > 0)) player.vy = -154;
-    const canVault = heroId !== 'pasha' || player.y+player.h <= level.height;
-    if (input.ability && !heldAbility && state.cooldown === 0 && canVault) {
+    if (!input.jump && heldJump && player.vy < -154) player.vy = -154;
+    const canPlay = heroId !== 'pasha' || player.y+player.h <= level.height;
+    if (input.ability && !heldAbility && state.cooldown === 0 && canPlay) {
       state.abilityTime = powers[heroId];
       state.cooldown = 30;
       if (heroId === 'pasha') {
-        // Keep the sprite visible when taking a second jump high above the upper ledges.
-        const headroom = Math.max(0,player.y-6);
-        player.vy = -Math.min(VAULT_SPEED, Math.sqrt(2*GRAVITY*headroom));
-        player.onGround = false;
-        coyote = jumpBuffer = 0;
-        vaultAssist = .30;
+        state.solo = { x: player.x+player.w/2, y: player.y+player.h/2,
+          age: 0, front: FIRST_CHORD, radius: SOLO_RADIUS };
       }
     }
     heldJump = !!input.jump;

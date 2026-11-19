@@ -1,7 +1,7 @@
 import { LEVELS } from './levels.js';
-import { createRun } from './physics.js?v=family-five-1';
-import { drawRun } from './renderer.js?v=family-five-1';
-import { playSound, setSoundEnabled } from './audio.js';
+import { createRun } from './physics.js?v=guitar-solo-1';
+import { drawRun } from './renderer.js?v=guitar-solo-1';
+import { playSound, setSoundEnabled, stopGuitar } from './audio.js?v=guitar-solo-1';
 
 const byId = id => document.getElementById(id);
 const lobby = byId('lobby');
@@ -31,8 +31,8 @@ const heroes = {
     tip: 'Папа говорит «Бу!». Монстры 3 секунды бегут от него и дают ему пройти.',
   },
   pasha: {
-    name: 'Паша', power: 'Высокий прыжок', action: 'Перепрыгнуть', color: '#86e9db',
-    tip: 'Паша перепрыгивает монстров. Используй способность с земли или прямо в воздухе, чтобы прыгнуть ещё выше.',
+    name: 'Паша', power: 'Гитарное соло', action: 'Сыграть на гитаре', color: '#86e9db',
+    tip: 'Паша играет на гитаре. Ноты разлетаются в обе стороны. Ближайшие монстры танцуют пять секунд — за это время можно пробежать мимо.',
   },
 };
 const worldArt = {
@@ -92,6 +92,7 @@ function saveSelection() {
 for (const [id, hero] of Object.entries(heroes)) {
   const card = element('label', 'hero-card');
   card.style.setProperty('--hero-color', hero.color);
+  card.title = hero.tip;
   const radio = choice('hero', id, id === heroId);
   radio.addEventListener('change', () => {
     heroId = id;
@@ -170,13 +171,27 @@ function updateHud() {
   checkpoint.title = arrived ? 'Контрольная точка пройдена' : 'До контрольной точки';
   const route = s.status === 'won' ? 1 : (s.player.x - s.level.spawn.x) / (s.level.flag.x - s.level.spawn.x);
   byId('route-fill').style.transform = 'scaleX(' + Math.max(0, Math.min(1, route)).toFixed(3) + ')';
-  const seconds = Math.ceil(s.cooldown);
+  const cooldown = Math.ceil(s.cooldown);
+  let label = heroes[heroId].action;
+  let seconds = cooldown;
+  let playingMusic = false;
+  if (heroId === 'pasha') {
+    let dance = 0;
+    for (const enemy of s.enemies) dance = Math.max(dance, enemy.dance);
+    playingMusic = Boolean(s.solo) || dance > 0;
+    if (s.solo) { label = 'Гитарное соло!'; seconds = 0; }
+    else if (dance > 0) { label = 'Танец'; seconds = Math.ceil(dance); }
+    else if (cooldown > 0) label = 'Гитара';
+  }
+  setText(byId('ability-name'), label);
   setText(byId('cooldown'), seconds > 0 ? seconds + ' с' : '');
-  const disabled = seconds > 0 ? 'true' : 'false';
+  abilityButton.classList.toggle('playing-solo', playingMusic);
+  const disabled = cooldown > 0 ? 'true' : 'false';
   if (abilityButton.getAttribute('aria-disabled') !== disabled) abilityButton.setAttribute('aria-disabled', disabled);
 }
 
 function stopLoop() {
+  stopGuitar();
   cancelAnimationFrame(frame);
   previousTime = undefined;
   clearInput();
@@ -208,14 +223,15 @@ function animate(time) {
   if (phase !== 'playing') return;
   if (previousTime !== undefined && time > previousTime) {
     const s = run.state;
-    const { lives, collected, checkpointReached, cooldown } = s;
+    const { lives, collected, checkpointReached, cooldown, solo } = s;
     const vy = s.player.vy;
     run.update(Math.min(.08, (time - previousTime) / 1000), inputs());
+    if (!solo && s.solo) playSound('guitar');
     if (s.status === 'won') playSound('win');
-    else if (s.lives < lives) playSound('hit');
+    else if (s.lives < lives) { stopGuitar(); playSound('hit'); }
     else if (!checkpointReached && s.checkpointReached) playSound('checkpoint');
     else if (s.collected > collected) playSound('gem');
-    else if (s.cooldown > cooldown) playSound('ability');
+    else if (s.cooldown > cooldown && heroId !== 'pasha') playSound('ability');
     else if (vy >= 0 && s.player.vy < 0) playSound('jump');
   }
   previousTime = time;
@@ -243,7 +259,7 @@ function start() {
   setText(byId('arena-title'), level.title);
   setText(byId('hero-name'), hero.name);
   showPortrait(byId('hud-portrait'), heroId);
-  setText(byId('ability-name'), hero.action);
+  abilityButton.title = hero.tip;
   lobby.hidden = true;
   arena.hidden = false;
   document.body.dataset.screen = 'game';

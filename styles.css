@@ -492,7 +492,7 @@ h2 {
   clip-path: polygon(0 9%, 100% 9%, 100% 69%, 52% 69%, 22% 94%, 22% 69%, 0 69%);
 }
 .power-pasha {
-  clip-path: polygon(0 94%, 0 57%, 16% 57%, 16% 31%, 39% 31%, 39% 13%, 72% 13%, 72% 0, 100% 21%, 73% 47%, 73% 34%, 47% 34%, 47% 50%, 29% 50%, 29% 73%, 14% 73%, 14% 94%);
+  clip-path: polygon(25% 14%,100% 0,100% 75%,86% 88%,63% 88%,63% 68%,82% 58%,82% 27%,44% 34%,44% 88%,30% 100%,5% 100%,0 88%,6% 74%,25% 66%);
 }
 .levels {
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -671,6 +671,11 @@ kbd {
 }
 .ability-key[aria-disabled='true'] {
   color: #9ba79e;
+}
+.ability-key.playing-solo {
+  background: #284c46;
+  color: #b9fce4;
+  border-color: #7cccb8;
 }
 #cooldown:not(:empty) {
   font-variant-numeric: tabular-nums;
