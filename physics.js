@@ -21,6 +21,77 @@ const overlaps = (a, b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.
 const approaches = (value, target, delta) => value < target ? Math.min(target,value+delta) : Math.max(target,value-delta);
 const remaining = (value,dt) => value <= dt+1e-8 ? 0 : value-dt;
 
+const playerFields = ['x', 'y', 'vx', 'vy', 'facing'];
+const enemyFields = ['x', 'y', 'vx', 'baseY', 'minX', 'maxX', 'facing', 'phase', 'stun', 'dance', 'actionCooldown'];
+const runFields = ['lives', 'collected', 'time', 'cooldown', 'invulnerable', 'abilityTime', 'checkpointReached',
+  'guitarStartedAt', 'solo', 'dragon', 'monsterEffects'];
+const pick = (value, fields) => Object.fromEntries(fields.map(key => [key, value[key]]));
+const numbers = (value, fields) => value != null && fields.every(key => Number.isFinite(value[key]));
+const facing = value => value === 1 || value === -1;
+const timed = value => numbers(value, ['age', 'duration']) && value.age >= 0 && value.duration > 0;
+
+const actions = {
+  draw: 'skeleton', release: 'skeleton', fuse: 'creeper', blinkOut: 'enderman', blinkIn: 'enderman',
+  inhale: 'ghast', exhale: 'ghast', compress: 'magma_cube', vault: 'magma_cube', land: 'magma_cube',
+};
+function validAction(a, type) {
+  if (a === null) return true;
+  if (!timed(a) || typeof a.kind !== 'string' || actions[a.kind] !== type) return false;
+  if (a.kind === 'blinkOut') return numbers(a, ['toX', 'patrolLeft', 'patrolRight']);
+  if (a.kind === 'inhale') return numbers(a, ['dx', 'dy']);
+  if (a.kind === 'compress' || a.kind === 'vault') {
+    return numbers(a.landing, ['x', 'y', 'minX', 'maxX']) && facing(a.landing.dir) &&
+      (a.kind === 'compress' || numbers(a, ['fromX', 'fromY']));
+  }
+  return true;
+}
+function validEffect(e) {
+  if (!timed(e) || !numbers(e, ['x', 'y'])) return false;
+  switch (e.kind) {
+    case 'arrow': case 'portal': return facing(e.dir);
+    case 'fireball': return numbers(e, ['vx', 'vy']);
+    case 'blast': return Number.isFinite(e.radius) && e.radius > 0;
+    case 'cinders': return true;
+    default: return false;
+  }
+}
+function validDragon(d, levelId) {
+  if (levelId !== 'end') return d === null;
+  const spot = c => numbers(c, ['x', 'y', 'radius', 'height']) && c.radius > 0 && c.height > 0;
+  return timed(d) && numbers(d, ['x', 'y', 'pitch', 'fromX', 'fromY', 'fromPitch']) &&
+    typeof d.engaged === 'boolean' && facing(d.dir) && facing(d.attackDir) &&
+    ['patrol', 'warning', 'dive', 'recover'].includes(d.phase) &&
+    Array.isArray(d.targets) && d.targets.length <= 3 && d.targets.every(t => spot(t) && typeof t.released === 'boolean') &&
+    (!['warning', 'dive'].includes(d.phase) || d.targets.length > 0) &&
+    Array.isArray(d.clouds) && d.clouds.length <= 3 && d.clouds.every(c => spot(c) && timed(c));
+}
+
+function validProgress(p, level) {
+  if (!numbers(p, ['time','cooldown','invulnerable','abilityTime']) || p.time < 0 || p.cooldown < 0 ||
+      p.invulnerable < 0 || p.abilityTime < 0 ||
+      !Number.isInteger(p.lives) || p.lives < 1 || p.lives > 3 || typeof p.checkpointReached !== 'boolean') return false;
+  if (!numbers(p.player, playerFields) || !facing(p.player.facing) || typeof p.player.onGround !== 'boolean' ||
+      p.player.x < 0 || p.player.x > level.width - PLAYER_W || p.player.y > level.height + 20) return false;
+  if (!numbers(p.input, ['coyote','jumpBuffer']) || typeof p.input.heldJump !== 'boolean' ||
+      typeof p.input.heldAbility !== 'boolean' || p.input.coyote < 0 || p.input.jumpBuffer < 0) return false;
+  if (!Array.isArray(p.gems) || p.gems.length !== level.gems.length || !p.gems.every(v => typeof v === 'boolean') ||
+      p.collected !== p.gems.filter(Boolean).length) return false;
+  if (!Array.isArray(p.enemies) || p.enemies.length !== level.enemies.length ||
+      !p.enemies.every((e,i) => numbers(e, enemyFields) && e.type === level.enemies[i].type && facing(e.facing) &&
+        typeof e.alive === 'boolean' && validAction(e.action, e.type))) return false;
+  return (p.guitarStartedAt === null || Number.isFinite(p.guitarStartedAt)) &&
+    (p.solo === null || (numbers(p.solo, ['x','y','age','radius','front']) && p.solo.radius > 0 && p.solo.front >= 0)) &&
+    validDragon(p.dragon, level.id) && Array.isArray(p.monsterEffects) && p.monsterEffects.length <= 64 &&
+    p.monsterEffects.every(validEffect);
+}
+
+export function restoreRun(save) {
+  const level = LEVELS.find(l => l.id === save?.level);
+  if (!level || save.version !== 1 || typeof save.hero !== 'string' || !Object.hasOwn(powers, save.hero) ||
+      !validProgress(save.progress, level)) return null;
+  return createRun(level.id, save.hero, structuredClone(save.progress));
+}
+
 function spawnEnemy(def, index) {
   const [w,h,speed,motion] = beasts[def.type];
   const hover = motion === 'drift' ? 72 : motion === 'float' ? 14 : 0;
@@ -29,7 +100,7 @@ function spawnEnemy(def, index) {
     phase: index*.53, alive: true, stun: 0, dance: 0, action: null, actionCooldown: 0 };
 }
 
-export function createRun(levelId = 'temple', heroId = 'kirill') {
+export function createRun(levelId = 'temple', heroId = 'kirill', progress = null) {
   const level = LEVELS.find(l => l.id === levelId) || LEVELS[0];
   if (!Object.hasOwn(powers,heroId)) heroId = 'kirill';
   const player = { ...level.spawn, w: PLAYER_W, h: PLAYER_H, vx: 0, vy: 0, facing: 1, onGround: true };
@@ -40,6 +111,23 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     monsterEffects: [], checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null, guitarStartedAt: null,
   };
   let coyote = 0, jumpBuffer = 0, heldJump = false, heldAbility = false;
+  if (progress) {
+    Object.assign(state, pick(progress, runFields));
+    Object.assign(player, pick(progress.player, [...playerFields, 'onGround']));
+    state.gems.forEach((gem,i) => { gem.taken = progress.gems[i]; });
+    state.enemies.forEach((enemy,i) => Object.assign(enemy, pick(progress.enemies[i], [...enemyFields, 'alive', 'action'])));
+    ({coyote, jumpBuffer, heldJump, heldAbility} = progress.input);
+  }
+
+  function snapshot() {
+    if (state.status !== 'playing') return null;
+    return { version: 1, hero: heroId, level: level.id, progress: structuredClone({
+      ...pick(state, runFields), player: pick(player, [...playerFields, 'onGround']),
+      gems: state.gems.map(gem => gem.taken),
+      enemies: state.enemies.map(enemy => pick(enemy, [...enemyFields, 'type', 'alive', 'action'])),
+      input: {coyote, jumpBuffer, heldJump, heldAbility},
+    }) };
+  }
 
   function loseLife() {
     state.lives--;
@@ -222,5 +310,5 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       dt -= slice;
     }
   }
-  return { state, update };
+  return { state, update, snapshot };
 }

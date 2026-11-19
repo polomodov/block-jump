@@ -1,8 +1,9 @@
 import { LEVELS } from './levels.js?v=living-worlds-1';
-import { createRun } from './physics.js?v=dragon-flight-1';
+import { createRun, restoreRun } from './physics.js?v=offline-1';
 import { drawRun } from './renderer.js?v=dragon-flight-1';
 import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
 import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
+import { bindProgress, loadSavedGame, saveGame, clearSavedGame, addResult } from './progress.js';
 
 const byId = id => document.getElementById(id);
 const lobby = byId('lobby');
@@ -63,6 +64,15 @@ let frame;
 let previousTime;
 let sound = false;
 let continueAfterHelp = false;
+let lastSaveTime = -Infinity;
+let runId;
+const newRunId = () => globalThis.crypto?.randomUUID?.() ?? Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+
+function saveRun() {
+  if (run?.state.status !== 'playing') return;
+  saveGame({...run.snapshot(), id:runId});
+  lastSaveTime = run.state.time;
+}
 
 function setText(element, text) {
   const value = String(text);
@@ -248,8 +258,12 @@ function animate(time) {
   updateHud();
   if (run.state.status !== 'playing') {
     phase = run.state.status;
+    addResult({id:runId, hero:heroId, level:level.id, gems:run.state.collected, lives:run.state.lives, outcome:phase});
     showResult();
-  } else frame = requestAnimationFrame(animate);
+  } else {
+    if (run.state.time - lastSaveTime >= 1) saveRun();
+    frame = requestAnimationFrame(animate);
+  }
 }
 
 function play() {
@@ -261,9 +275,7 @@ function play() {
   frame = requestAnimationFrame(animate);
 }
 
-function start() {
-  stopLoop();
-  run = createRun(level.id, heroId);
+function showArena() {
   const hero = heroes[heroId];
   document.title = level.title + ' · Блок Прыжок';
   setText(byId('arena-title'), level.title);
@@ -275,16 +287,46 @@ function start() {
   document.body.dataset.screen = 'game';
   window.scrollTo(0, 0);
   updateHud();
+}
+
+function start() {
+  stopLoop();
+  run = createRun(level.id, heroId);
+  runId = newRunId();
+  showArena();
+  saveRun();
   play();
+}
+
+function resumeSavedGame(save) {
+  const restored = restoreRun(save);
+  if (!restored) {
+    clearSavedGame();
+    return false;
+  }
+  stopLoop();
+  run = restored;
+  runId = typeof save.id === 'string' && save.id ? save.id : newRunId();
+  heroId = run.state.heroId;
+  byId('heroes').querySelector('input[value="' + heroId + '"]').checked = true;
+  chooseLevel(run.state.level);
+  phase = 'paused';
+  lastSaveTime = run.state.time;
+  showArena();
+  drawRun(board, run.state);
+  showResult();
+  return true;
 }
 
 function pause() {
   if (phase !== 'playing') return;
   phase = 'paused';
+  saveRun();
   showResult();
 }
 
 function showLobby() {
+  saveRun();
   stopLoop();
   phase = 'lobby';
   if (runDialog.open) runDialog.close();
@@ -324,6 +366,7 @@ byId('help').addEventListener('click', () => {
   continueAfterHelp = phase === 'playing';
   if (continueAfterHelp) {
     phase = 'help';
+    saveRun();
     stopLoop();
   }
   helpDialog.showModal();
@@ -392,7 +435,12 @@ document.addEventListener('keyup', event => keys.delete(event.code));
 function leaveWindow() {
   continueAfterHelp = false;
   clearInput();
-  pause();
+  if (phase === 'playing') pause();
+  else saveRun();
 }
 window.addEventListener('blur', leaveWindow);
+window.addEventListener('pagehide', leaveWindow);
 document.addEventListener('visibilitychange', () => { if (document.hidden) leaveWindow(); });
+const saved = loadSavedGame();
+if (saved && !restoreRun(saved)) clearSavedGame();
+bindProgress({onResume: resumeSavedGame});
