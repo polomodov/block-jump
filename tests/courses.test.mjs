@@ -33,7 +33,7 @@ function canLand(state, velocity) {
 
 for (const level of LEVELS) {
   test(level.id+' can be completed with three lives by every hero using only run and jump', () => {
-    for (const hero of ['kirill','maxim','mom','dad']) {
+    for (const hero of ['kirill','maxim','mom','dad','pasha']) {
       const run = createRun(level.id,hero), state = run.state;
       let jump = false;
       for (let frame=0; frame<2400 && state.status==='playing'; frame++) {

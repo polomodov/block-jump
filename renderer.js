@@ -1,8 +1,8 @@
 import { THEMES, rect, terrainLayer, midgroundLayer, drawDepth } from './world-art.js';
 
 const WIDTH=480, HEIGHT=216;
-const actorColumns=['kirill','maxim','mom','dad','zombie','creeper','slime','skeleton','drowned','guardian','spider','witch','magma_cube','blaze','ghost','pumpkin_guard','enderman','shulker'];
-const imageFiles={world:'world-panoramas.png',realm:'realm-panoramas.png',actors:'platform-actors.png'};
+const actorColumns=['kirill','maxim','mom','dad','zombie','creeper','slime','skeleton','drowned','guardian','spider','witch','magma_cube','blaze','ghost','pumpkin_guard','enderman','shulker','pasha'];
+const imageFiles={world:'world-panoramas.png',realm:'realm-panoramas.png',actors:'platform-actors.png?v=family-five-1'};
 const images=new Map(), scenes=new WeakMap();
 
 function sheet(key) {
@@ -107,6 +107,16 @@ function playerEffects(c,s,cx,cy,front) {
   const dir=s.player.facing||1;
   if(!front && s.heroId==='kirill') {
     for(let i=0;i<3;i++) rect(c,i ? '#67c6c5':'#c9ffeb',cx-dir*(11+i*4),cy-6+i*3,5-i,1);
+  } else if(!front && s.heroId==='pasha') {
+    // A pair of vertical wind trails follows his feet until the high jump lands.
+    const foot=Math.round(s.player.y+s.player.h);
+    const pulse=Math.floor(s.time*8)%3, height=s.player.vy<0 ? 11 : 6;
+    for(const dx of [-5,4]) {
+      rect(c,'#69cfc1',cx+dx,foot+1,2,height-pulse);
+      rect(c,'#d6fff0',cx+dx,foot+1,1,3);
+      rect(c,'#8ae5cd',cx+dx*1.5,foot+height+pulse,2,2);
+    }
+    rect(c,'#e2ffca',cx-dir*2,foot+height+4-pulse,2,2);
   } else if(front && s.heroId==='maxim') {
     const x=cx+dir*11;
     rect(c,'#ffe3a2',x,cy-6,3,7); rect(c,'#ffc270',x+dir*3,cy-4,2,5);

@@ -1,6 +1,6 @@
 import { LEVELS } from './levels.js';
-import { createRun } from './physics.js';
-import { drawRun } from './renderer.js';
+import { createRun } from './physics.js?v=family-five-1';
+import { drawRun } from './renderer.js?v=family-five-1';
 import { playSound, setSoundEnabled } from './audio.js';
 
 const byId = id => document.getElementById(id);
@@ -29,6 +29,10 @@ const heroes = {
   dad: {
     name: 'Папа', power: 'Крик «Бу!»', action: 'Сказать «Бу!»', color: '#ffa491', portrait: '100% 100%',
     tip: 'Папа говорит «Бу!». Монстры 3 секунды бегут от него и дают ему пройти.',
+  },
+  pasha: {
+    name: 'Паша', power: 'Высокий прыжок', action: 'Перепрыгнуть', color: '#86e9db',
+    tip: 'Паша перепрыгивает монстров. Используй способность с земли или прямо в воздухе, чтобы прыгнуть ещё выше.',
   },
 };
 const worldArt = {
@@ -64,6 +68,11 @@ function element(tag, className, text) {
   return node;
 }
 
+function showPortrait(element, id) {
+  element.dataset.hero = id;
+  element.style.backgroundPosition = heroes[id].portrait || 'center';
+}
+
 function choice(group, id, selected) {
   const radio = document.createElement('input');
   radio.type = 'radio';
@@ -90,7 +99,7 @@ for (const [id, hero] of Object.entries(heroes)) {
   });
   const picture = element('span', 'hero-picture');
   const portrait = element('span', 'portrait');
-  portrait.style.backgroundPosition = hero.portrait;
+  showPortrait(portrait, id);
   picture.append(portrait);
   picture.setAttribute('aria-hidden', 'true');
   const caption = element('span', 'hero-caption');
@@ -197,7 +206,7 @@ function showResult() {
 
 function animate(time) {
   if (phase !== 'playing') return;
-  if (previousTime !== undefined) {
+  if (previousTime !== undefined && time > previousTime) {
     const s = run.state;
     const { lives, collected, checkpointReached, cooldown } = s;
     const vy = s.player.vy;
@@ -233,7 +242,7 @@ function start() {
   document.title = level.title + ' · Блок Прыжок';
   setText(byId('arena-title'), level.title);
   setText(byId('hero-name'), hero.name);
-  byId('hud-portrait').style.backgroundPosition = hero.portrait;
+  showPortrait(byId('hud-portrait'), heroId);
   setText(byId('ability-name'), hero.action);
   lobby.hidden = true;
   arena.hidden = false;

@@ -2,6 +2,7 @@ import { LEVELS } from './levels.js';
 
 const RUN_SPEED = 132;
 const JUMP_SPEED = 322;
+const VAULT_SPEED = 440;
 const GRAVITY = 830;
 const PLAYER_W = 13, PLAYER_H = 19;
 
@@ -13,7 +14,8 @@ const beasts = {
   magma_cube: [16,12,23,'hop'], blaze: [13,16,20,'float'], ghost: [14,15,25,'float'],
   pumpkin_guard: [16,18,21], enderman: [13,21,30], shulker: [15,13,0],
 };
-const powers = { kirill: 4, maxim: .35, mom: 4, dad: 3 };
+// Two seconds covers a vault falling all the way across the screen. A landing ends it sooner.
+const powers = { kirill: 4, maxim: .35, mom: 4, dad: 3, pasha: 2 };
 const overlaps = (a, b) => a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
 const approaches = (value, target, delta) => value < target ? Math.min(target,value+delta) : Math.max(target,value-delta);
 const remaining = (value,dt) => value <= dt+1e-8 ? 0 : value-dt;
@@ -36,9 +38,12 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     checkpointReached: false, invulnerable: 0, abilityTime: 0,
   };
   let coyote = 0, jumpBuffer = 0, heldJump = false, heldAbility = false;
+  let vaultAssist = 0;
 
   function loseLife() {
     state.lives--;
+    state.abilityTime = 0;
+    vaultAssist = 0;
     if (state.lives === 0) {
       state.status = 'lost';
       return;
@@ -47,12 +52,16 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       ? { x: level.checkpoint.x - PLAYER_W/2, y: level.checkpoint.y - PLAYER_H } : level.spawn;
     Object.assign(player,spawn,{ vx: 0, vy: 0, onGround: true, facing: 1 });
     state.invulnerable = 1.6;
-    state.abilityTime = 0;
     coyote = jumpBuffer = 0;
   }
 
   function movePlayer(dt, input) {
-    const dir = Number(!!input.right) - Number(!!input.left);
+    let dir = Number(!!input.right) - Number(!!input.left);
+    if (input.left || input.right) vaultAssist = 0;
+    if (vaultAssist > 0) {
+      dir = player.facing;
+      vaultAssist = remaining(vaultAssist,dt);
+    }
     const boost = heroId === 'kirill' && state.abilityTime > 0;
     player.vx = approaches(player.vx,dir*(boost ? 184 : RUN_SPEED),dt*(dir ? 1060 : 1370));
     if (dir) player.facing = dir;
@@ -121,7 +130,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
           Math.abs(enemy.x+enemy.w/2-player.x-player.w/2) < 34 && Math.abs(enemy.y-player.y) < 24) {
         enemy.stun = 4;
       }
-      if (enemy.stun > 0 || !overlaps(player,enemy)) continue;
+      if (enemy.stun > 0 || (heroId === 'pasha' && active) || !overlaps(player,enemy)) continue;
       if (player.vy > 0 && previousFeet <= enemy.y+4) {
         enemy.alive = false;
         player.y = enemy.y-player.h;
@@ -140,6 +149,10 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     state.invulnerable = remaining(state.invulnerable,dt);
     state.cooldown = remaining(state.cooldown,dt);
     const previousFeet = movePlayer(dt,input);
+    if (heroId === 'pasha' && player.onGround) {
+      state.abilityTime = 0;
+      vaultAssist = 0;
+    }
     if (player.y > level.height+20) {
       loseLife();
       return;
@@ -162,12 +175,21 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
 
   function update(dt,input = {}) {
     if (state.status !== 'playing' || !Number.isFinite(dt) || dt <= 0) return;
-    if (input.ability && !heldAbility && state.cooldown === 0) {
+    if (input.jump && !heldJump) jumpBuffer = .14;
+    if (!input.jump && heldJump && player.vy < -154 && !(heroId === 'pasha' && state.abilityTime > 0)) player.vy = -154;
+    const canVault = heroId !== 'pasha' || player.y+player.h <= level.height;
+    if (input.ability && !heldAbility && state.cooldown === 0 && canVault) {
       state.abilityTime = powers[heroId];
       state.cooldown = 30;
+      if (heroId === 'pasha') {
+        // Keep the sprite visible when taking a second jump high above the upper ledges.
+        const headroom = Math.max(0,player.y-6);
+        player.vy = -Math.min(VAULT_SPEED, Math.sqrt(2*GRAVITY*headroom));
+        player.onGround = false;
+        coyote = jumpBuffer = 0;
+        vaultAssist = .30;
+      }
     }
-    if (input.jump && !heldJump) jumpBuffer = .14;
-    if (!input.jump && heldJump && player.vy < -154) player.vy = -154;
     heldJump = !!input.jump;
     heldAbility = !!input.ability;
     // Small steps keep short ledges and fast falls consistent across display refresh rates.
