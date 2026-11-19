@@ -1,3 +1,4 @@
+import { drawArrow } from './monster-action-art.js?v=monster-motion-1';
 import { beat, performanceAge, strokes } from './guitar.js?v=encore-1';
 
 // Illustration coordinates are in game units. The canvas scales the paths at display density.
@@ -271,7 +272,41 @@ const violet=['#574c78','#7d6c9c','#413950'], red=['#a64d37','#de8a47','#6e3634'
 function eyes(c,x,y,gap,color='#272936') {
   c.fillStyle=color;c.fillRect(x,y,1.12,1.5);c.fillRect(x+gap,y,1.1,1.5);
 }
-function humanoid(c,id,gait,dancing) {
+function bow(c, gripX, gripY, angle, tension, carryArrow) {
+  c.save();c.translate(gripX,gripY);c.rotate(angle);
+  const tipX=-2.75-tension*1.8, tipY=6.7-tension*.65;
+  const nock=tipX-6.4*tension;
+  c.beginPath();c.moveTo(tipX,-tipY);
+  c.bezierCurveTo(tipX+.8,-tipY+.15,1.6,-3.45,0,-.35);
+  c.bezierCurveTo(1.28,2.2,tipX+1.8,tipY-.6,tipX,tipY);
+  c.lineWidth=1.55;c.strokeStyle='#453238';c.stroke();
+  c.lineWidth=.94;c.strokeStyle='#e6a65e';c.stroke();
+  c.strokeStyle='#ffe0a5';c.lineWidth=.38;c.stroke();
+  stroke(c,tipX,-tipY,nock,0,tipX,tipY,'#535260',1.03);
+  stroke(c,tipX,-tipY,nock,0,tipX,tipY,'#fff2cf',.53);
+  if(carryArrow)drawArrow(c,nock+11.4,0,1);
+  stroke(c,-.2,-1,.23,0,-.3,.95,'#9f6250',1.7);c.restore();
+}
+
+function archerPose(c, action) {
+  const p=Math.min(1,action.age/action.duration), release=action.kind==='release';
+  const lift=release ? 1 : Math.min(1,p/.34);
+  const tension=release ? Math.exp(-p*10)*Math.cos(p*17) : Math.min(1,Math.max(0,(p-.18)/.75));
+  const bx=4.25+3.55*lift, by=-9.15-1.45*lift;
+  const angle=(1-lift)*.52 + (release?-.12*Math.sin(p*Math.PI):0);
+  const nock=-2.75-tension*8.2;
+  const wx=release ? -2.5-p*2.7 : bx+Math.cos(angle)*nock;
+  const wy=release ? -11.1-p*1.15 : by+Math.sin(angle)*nock;
+  // The bow hand stays extended as the draw elbow retracts towards the ribs.
+  stroke(c,2,-11.25,4.8,-10.5,bx,by,'#657980',1.8);
+  stroke(c,2.1,-11.55,4.8,-10.85,bx,by-.22,'#e2e2c9',.95);
+  bow(c,bx,by,angle,tension,!release);
+  stroke(c,-2,-11.18,-3.55-Math.max(tension,0)*1.35,-7.65-Math.max(tension,0)*1.9,wx,wy,'#66777f',1.8);
+  stroke(c,-2,-11.42,-3.6-Math.max(tension,0)*1.35,-7.92-Math.max(tension,0)*1.9,wx,wy-.2,'#e1e2ce',1);
+  oval(c,wx,wy,.97,.7,'#d9ddc7');oval(c,bx,by,.94,.75,'#e5e4cb');
+}
+
+function humanoid(c,id,gait,dancing,action) {
   const bone=id==='skeleton', dark=id==='enderman', pumpkin=id==='pumpkin_guard', witch=id==='witch';
   const face=bone?stone:dark?coal:pumpkin?fire:witch?['#aa8c81','#d3b8a0','#776575']:id==='drowned'?sea:zombie;
   const coat=bone?stone:dark?coal:pumpkin?['#686f46','#a5a060','#414c3e']:witch?purple:teal;
@@ -289,7 +324,9 @@ function humanoid(c,id,gait,dancing) {
   else cube(c,-2.15,-11.8,4.6,6.5,1.5,coat);
   if(bone) for(let i=0;i<3;i++){c.fillStyle=coal[0];c.fillRect(-1.6,-10.9+i*1.5,3.8,.62);}
   const reach=dark?-.9:-5.9;
-  let bowX = 5, bowY = -10;
+  const aiming = bone && (action?.kind==='draw' || action?.kind==='release');
+  const shifting = dark && (action?.kind==='blinkOut' || action?.kind==='blinkIn');
+  let bowX = 3.5-gait*1.8, bowY = reach;
   if (dancing) {
     // Alternate an overhead disco point and a hand pointing toward the floor.
     const span = dark ? 1.25 : 1;
@@ -301,7 +338,13 @@ function humanoid(c,id,gait,dancing) {
         side===-1 ? face[2] : face[0], dark ? 1.2 : 1.8);
       if (side===1) { bowX = wristX; bowY = wristY-.6; }
     }
-  } else {
+  } else if(shifting) {
+    const charge=action.kind==='blinkOut'?action.age/action.duration:1-action.age/action.duration;
+    for(const side of [-1,1]){
+      const wrist=side*(4.2-Math.sin(charge*Math.PI/2)*3.3);
+      stroke(c,side*2.5,-11,side*(4.4+charge),-6.4,wrist,-2-charge*8,side<0?coal[2]:coal[1],1.38);
+    }
+  } else if(!aiming) {
     stroke(c,-2.95,-11.1,-2.7+gait,-8.4,-2.8+gait*2,reach,face[2],dark?1.05:1.62);
     stroke(c,2.5,-11.1,3.25-gait,-8.3,3.5-gait*1.8,reach,face[0],dark?1.1:1.78);
   }
@@ -322,15 +365,12 @@ function humanoid(c,id,gait,dancing) {
     shape(c,'M-2.7 -18L2.3 -17.9',null,'#bf9658',.68);
     oval(c,.5,-14,.72,1.1,'#c7a08d');
   }
-  if (bone) {
-    c.save();c.translate(bowX,bowY);
-    shape(c,'M0 0Q4 2.1 -.8 5.8L0 0',null,'#b4855a',.67);
-    c.restore();
-  }
+  if (aiming) archerPose(c,action);
+  else if (bone) bow(c,bowX,bowY,dancing?-.85+gait*.35:-.61+gait*.1,0,false);
   c.restore();
 }
-function creature(c,id,t,gait,dancing) {
-  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait,dancing);return; }
+function creature(c,id,t,gait,dancing,action) {
+  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait,dancing,action);return; }
   if(id==='creeper'){
     for(const side of [-1,1]) {
       const tap = dancing ? Math.max(0,side*gait) : 0;
@@ -339,6 +379,25 @@ function creature(c,id,t,gait,dancing) {
     cube(c,-1.5,-11,4.2,8.5,1.65,moss);cube(c,-2.6,-17.4,6.7,6,2,moss);
     eyes(c,-1.7,-15.8,3.7); shape(c,'M.15 -14.55L1.75 -14.55 1.75 -13.65 2.55 -13.65 2.55 -12 1.75 -12 1.75 -12.6 .1 -12.6 .1 -12 -.65 -12 -.65 -13.65 .15 -13.65Z',coal[2]);
     c.fillStyle='#93b86d';c.fillRect(-1,-9.5,1.1,1.15);c.fillRect(1,-6.7,1.3,1.5);
+    if(action?.kind==='fuse') {
+      const p=Math.min(1,action.age/action.duration), beat=(1-Math.cos(p*4*Math.PI))*.5;
+      c.save();c.globalAlpha*=.17+.7*p+.1*beat;
+      shape(c,'M-1 -10.7L.2 -9.15 -.6 -7.85 1.3 -6.7 .55 -5.3 1.2 -3.2M.15 -9.1L1.85 -9.65M1.28 -6.65L2.35 -7.1',null,'#733c3a',1.55);
+      shape(c,'M-1 -10.7L.2 -9.15 -.6 -7.85 1.3 -6.7 .55 -5.3 1.2 -3.2M.15 -9.1L1.85 -9.65M1.28 -6.65L2.35 -7.1',null,'#ffce77',.85);
+      c.save();c.globalAlpha*=.17+.54*beat+.12*p;
+      shape(c,'M-4.6 -18.45L2.07 -18.45 4.07 -17.4 -2.62 -17.4ZM-2.6 -17.4L4.07 -17.4 4.07 -16.65 -2.6 -16.45Z','#ffe2a0');
+      shape(c,'M-3.1 -11.75L1.1 -11.75 2.78 -10.98 -1.5 -10.98ZM-1.45 -9.6L-.25 -9.6 -.25 -8.6 -1.45 -8.6ZM1.12 -7.4L2.15 -7.4 2.15 -5.85 1.12 -5.85Z','#ffd582');
+      c.restore();
+      c.fillStyle='#ffde96';c.fillRect(-1.65,-15.6,1.08,.7);c.fillRect(2.05,-15.6,1.08,.7);
+      c.restore();
+      for(let i=0;i<4;i++){
+        const s=(p*1.8+i*.26)%1, side=i%2?1:-1;
+        c.save();c.globalAlpha*=Math.sin(s*Math.PI)*(.45+p*.55);
+        const dx=side*(3+s*(2+i%3)), dy=-12-s*(6+i%3);
+        stroke(c,dx,dy,dx+side*.6,dy-.55,dx+side*.95,dy-1.65,'#ffcc70',.88);
+        c.restore();
+      }
+    }
   }else if(id==='slime'||id==='magma_cube'||id==='shulker'){
     const shell=id==='shulker',hot=id==='magma_cube';
     const col=shell?purple:hot?red:['#58b388','#aff1a7','#38857b'];
@@ -410,6 +469,17 @@ export function drawBeast(c,actor,camera,time) {
   c.scale(actor.facing*sizing,sizing);
   if(dancing)c.rotate(beat*.205);
   if(actor.stun)c.globalAlpha*=.65;
-  creature(c,actor.type,dancing?danceAge:actor.stun?0:time,gait,dancing);
+  const action=dancing||actor.stun?null:actor.action;
+  if(action?.kind==='fuse'){
+    const p=action.age/action.duration, pulse=(1-Math.cos(p*4*Math.PI))*.5;
+    c.scale(1+p*.28+pulse*.06,1-p*.09+pulse*.08);
+    c.rotate(Math.sin(p*22)*p*.03);
+  } else if(action?.kind==='blinkOut' || action?.kind==='blinkIn') {
+    const p=Math.min(1,action.age/action.duration);
+    const fold=action.kind==='blinkOut' ? p*p*p : (1-p)**3;
+    c.scale(1-fold*.87,1+fold*.15);
+    c.globalAlpha*=1-fold*.65;
+  }
+  creature(c,actor.type,dancing?danceAge:actor.stun?0:time,gait,dancing,action);
   c.restore();
 }

@@ -1,4 +1,5 @@
 import { LEVELS } from './levels.js';
+import { advanceAction, advanceMonsterEffects, interruptAction } from './enemy-actions.js?v=monster-motion-1';
 
 const RUN_SPEED = 132;
 const JUMP_SPEED = 322;
@@ -24,7 +25,7 @@ function spawnEnemy(def, index) {
   const hover = motion === 'float' ? 14 : 0;
   return { ...def, y: def.y-h-hover, baseY: def.y-h, w, h, speed, motion,
     vx: index%2 ? speed : -speed, facing: index%2 ? 1 : -1,
-    phase: index*.53, alive: true, stun: 0, dance: 0 };
+    phase: index*.53, alive: true, stun: 0, dance: 0, action: null, actionCooldown: 0 };
 }
 
 export function createRun(levelId = 'temple', heroId = 'kirill') {
@@ -34,7 +35,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   const state = {
     level, heroId, player, lives: 3, collected: 0, cooldown: 0, time: 0, status: 'playing',
     gems: level.gems.map(g => ({ ...g, taken: false })), enemies: level.enemies.map(spawnEnemy),
-    checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null, guitarStartedAt: null,
+    monsterEffects: [], checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null, guitarStartedAt: null,
   };
   let coyote = 0, jumpBuffer = 0, heldJump = false, heldAbility = false;
 
@@ -43,7 +44,11 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     state.abilityTime = 0;
     state.solo = null;
     state.guitarStartedAt = null;
-    for (const enemy of state.enemies) enemy.dance = 0;
+    state.monsterEffects = state.monsterEffects.filter(e => e.kind !== 'arrow');
+    for (const enemy of state.enemies) {
+      enemy.dance = 0;
+      interruptAction(enemy);
+    }
     if (state.lives === 0) {
       state.status = 'lost';
       return;
@@ -97,8 +102,6 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   }
 
   function moveEnemy(enemy, dt, frightened) {
-    enemy.stun = remaining(enemy.stun,dt);
-    if (enemy.stun > 0) return;
     if (frightened) enemy.facing = enemy.x+enemy.w/2 >= player.x+player.w/2 ? 1 : -1;
     // Even the normally anchored shulker scoots to safety when Dad shouts.
     const speed = frightened ? Math.max(20,enemy.speed)*1.65 : enemy.speed;
@@ -135,27 +138,33 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
         const dx = enemy.x+enemy.w/2-wave.x, dy = enemy.y+enemy.h/2-wave.y;
         if (Math.hypot(dx,dy) <= wave.front + 1e-8) {
           enemy.dance = 5;
+          interruptAction(enemy);
           enemy.vx = 0;
         }
       }
       if (enemy.dance > 0) continue;
-      moveEnemy(enemy,dt,active && heroId === 'dad');
+      enemy.stun = remaining(enemy.stun,dt);
       if (active && heroId === 'maxim' &&
           Math.abs(enemy.x+enemy.w/2-player.x-player.w/2) < 34 && Math.abs(enemy.y-player.y) < 24) {
         enemy.stun = 4;
       }
-      if (enemy.stun > 0 || !overlaps(player,enemy)) continue;
+      const holdingPose = advanceAction(enemy,state,dt,protectedByPower || enemy.stun > 0 || state.invulnerable > 0);
+      if (!holdingPose && !enemy.stun) moveEnemy(enemy,dt,active && heroId === 'dad');
+      if (!enemy.alive || enemy.stun > 0 || !overlaps(player,enemy)) continue;
+      if (enemy.action?.kind === 'blinkIn') continue;
       if (player.vy > 0 && previousFeet <= enemy.y+4) {
         enemy.alive = false;
+        interruptAction(enemy);
         player.y = enemy.y-player.h;
         player.vy = -185;
         player.onGround = false;
         coyote = 0;
-      } else if (!protectedByPower && state.invulnerable === 0) {
+      } else if (enemy.type !== 'creeper' && !protectedByPower && state.invulnerable === 0) {
         loseLife();
         return;
       }
     }
+    if (advanceMonsterEffects(state,dt,protectedByPower || state.invulnerable > 0)) loseLife();
   }
 
   function step(dt,input) {

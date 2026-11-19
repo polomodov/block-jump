@@ -1,6 +1,6 @@
 import { LEVELS } from './levels.js';
-import { createRun } from './physics.js?v=encore-1';
-import { drawRun } from './renderer.js?v=encore-1';
+import { createRun } from './physics.js?v=monster-motion-1';
+import { drawRun } from './renderer.js?v=monster-motion-1';
 import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
 import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
 
@@ -35,6 +35,11 @@ const heroes = {
     name: 'Паша', power: 'Гитарное соло', action: 'Сыграть на гитаре', color: '#86e9db',
     tip: 'Паша играет на гитаре. Ноты разлетаются в обе стороны. Ближайшие монстры танцуют пять секунд — за это время можно пробежать мимо.',
   },
+};
+const monsterTips = {
+  creeper: 'Крипер раздувается перед взрывом. Успей отбежать, пока горит запал.',
+  skeleton: 'Когда скелет натянет тетиву, приготовься перепрыгнуть стрелу.',
+  enderman: 'Фиолетовый портал показывает, куда сейчас переместится эндермен.',
 };
 const worldArt = {
   temple: [0, 4], arcade: [1, 4], waterpark: [2, 4], store: [3, 4],
@@ -309,6 +314,10 @@ runDialog.addEventListener('cancel', event => {
 
 byId('help').addEventListener('click', () => {
   setText(byId('help-power'), heroes[heroId].tip);
+  const tips = [...new Set(level.enemies.map(enemy => enemy.type))]
+    .map(type => monsterTips[type]).filter(Boolean);
+  setText(byId('help-monsters'), tips.join(' '));
+  byId('help-monsters').hidden = tips.length === 0;
   continueAfterHelp = phase === 'playing';
   if (continueAfterHelp) {
     phase = 'help';
