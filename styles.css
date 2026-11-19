@@ -24,8 +24,8 @@ body {
   margin: 0;
   min-height: 100svh;
   background:
-    linear-gradient(120deg, #24332f50, transparent 48%),
-    conic-gradient(at 1px 1px, transparent 75%, #56606745 0) 0 0/12px 12px,
+    radial-gradient(ellipse at 75% 0%, #66532e45, transparent 48rem),
+    radial-gradient(ellipse at 15% 25%, #31515064, transparent 45rem),
     var(--bg);
   color: var(--ink);
   font: 1rem/1.45 var(--sans);
@@ -142,7 +142,7 @@ nav {
 .touch-key,
 .ability-key {
   border: 1px solid #455255;
-  border-radius: 3px;
+  border-radius: 7px;
   background: #253035;
   box-shadow: inset 0 1px #ffffff12;
 }
@@ -193,10 +193,11 @@ main {
   align-items: center;
   min-height: clamp(244px, 25vw, 316px);
   border: 1px solid #687268;
-  border-bottom: 4px solid #554e3d;
+  border-bottom-color: #786a49;
+  border-radius: 14px;
   background: #23302b;
   overflow: hidden;
-  box-shadow: 0 4px #0b1316;
+  box-shadow: 0 12px 32px #070e153d;
 }
 .cover:before,
 .cover:after {
@@ -211,8 +212,8 @@ main {
   width: auto;
   height: 100%;
   aspect-ratio: 5/2;
-  background: url('./assets/jump-cover.png?v=family-five-1') center/100% 100% no-repeat;
-  image-rendering: pixelated;
+  background: url('./assets/jump-cover.webp') center/100% 100% no-repeat;
+  image-rendering: auto;
   mask-image: linear-gradient(90deg, transparent, #000 29%);
 }
 .cover:after {
@@ -284,12 +285,13 @@ p {
   color: #302315;
 }
 .launch {
+  border-radius: 7px;
   justify-content: center;
   gap: 13px;
   min-height: 45px;
   padding: 9px 18px;
-  font: 12px/1.45 var(--pixel);
-  letter-spacing: -0.055em;
+  font: 750 1.04rem/1.45 var(--sans);
+  letter-spacing: .005em;
 }
 .launch:hover,
 .jump-key:hover {
@@ -332,8 +334,8 @@ p {
 .choices legend,
 h2 {
   color: var(--cream);
-  font: 400 16px/1.55 var(--pixel);
-  letter-spacing: -0.06em;
+  font: 750 1.35rem/1.3 var(--sans);
+  letter-spacing: -0.025em;
 }
 .choices legend {
   padding: 0;
@@ -360,7 +362,8 @@ h2 {
   overflow: hidden;
   background: var(--panel);
   border: 1px solid var(--line);
-  box-shadow: 0 2px #0b1316;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px #080f142b;
   color: var(--ink);
   cursor: pointer;
 }
@@ -398,12 +401,12 @@ h2 {
 }
 .portrait {
   display: block;
-  background-image: url('./assets/hero-portraits.png?v=family-five-1');
+  background-image: url('./assets/hero-portraits.webp');
   background-size: 200% 200%;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 .portrait[data-hero='pasha'] {
-  background-image: url('./assets/pasha-portrait.png');
+  background-image: url('./assets/pasha-portrait.webp');
   background-size: 100% 100%;
 }
 .hero-picture .portrait {
@@ -432,8 +435,8 @@ h2 {
   background: linear-gradient(110deg, #2b3638, #202b2e);
 }
 .hero-caption strong {
-  font: 400 14px/1.45 var(--pixel);
-  letter-spacing: -0.06em;
+  font: 750 1.18rem/1.3 var(--sans);
+  letter-spacing: -0.015em;
 }
 .hero-caption small {
   display: flex;
@@ -503,7 +506,7 @@ h2 {
   height: 50px;
   background-color: #314148;
   background-repeat: no-repeat;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 .level-name {
   display: flex;
@@ -541,7 +544,9 @@ body[data-screen='game'] .sibling {
 .game-frame {
   border: 2px solid #637367;
   background: #142128;
-  box-shadow: 0 4px #080f13;
+  overflow: hidden;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px #080f134d;
 }
 .hud {
   gap: 16px;
@@ -563,7 +568,7 @@ body[data-screen='game'] .sibling {
   margin-right: auto;
 }
 .hud img {
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 .heart {
   width: 16px;
@@ -618,7 +623,7 @@ body[data-screen='game'] .sibling {
   height: auto;
   display: block;
   background: #1c3538;
-  image-rendering: pixelated;
+  image-rendering: auto;
   touch-action: none;
   outline-offset: 2px;
 }
@@ -869,7 +874,7 @@ dialog p + p {
     margin-top: 18px;
   }
   .choices legend {
-    font-size: 14px;
+    font-size: 1.16rem;
     margin-bottom: 8px;
   }
   .heroes {
@@ -888,7 +893,7 @@ dialog p + p {
     gap: 2px;
   }
   .hero-caption strong {
-    font-size: 12px;
+    font-size: 1.04rem;
   }
   .hero-caption small {
     font-size: 0.78rem;
@@ -907,7 +912,7 @@ dialog p + p {
     margin-bottom: 7px;
   }
   .arena-nav h2 {
-    font-size: 10px;
+    font-size: .92rem;
   }
   .hud {
     font-size: 0.76rem;

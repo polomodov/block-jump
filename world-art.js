@@ -14,75 +14,133 @@ export function rect(c, ink, x, y, w, h) {
   c.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
-function line(c, ink, x, y, tx, ty, weight = 1) {
-  const steps = Math.max(1, Math.abs(tx-x), Math.abs(ty-y));
-  for (let i=0; i<=steps; i++) rect(c,ink,x+(tx-x)*i/steps,y+(ty-y)*i/steps,weight,weight);
+// These layers are painted once per course. Sub-pixel bevels stay sharp on Retina displays.
+function layerCanvas(width,height) {
+  const image=document.createElement('canvas');
+  image.width=width*2; image.height=height*2;
+  const c=image.getContext('2d');
+  c.scale(2,2);
+  return {image,c};
+}
+
+function line(c,ink,x,y,tx,ty,weight=1) {
+  c.strokeStyle=ink; c.lineWidth=weight;
+  c.beginPath(); c.moveTo(x,y); c.lineTo(tx,ty); c.stroke();
+}
+
+function gradient(c,y,h,stops) {
+  const g=c.createLinearGradient(0,y,0,y+h);
+  for(const [position,color] of stops) g.addColorStop(position,color);
+  return g;
+}
+
+function facet(c,color,points) {
+  c.fillStyle=color; c.beginPath();
+  for(let i=0;i<points.length;i+=2) {
+    if(i===0) c.moveTo(points[i],points[i+1]); else c.lineTo(points[i],points[i+1]);
+  }
+  c.closePath(); c.fill();
 }
 
 function vine(c,x,y,length) {
-  rect(c,'#537349',x,y,1,length);
-  for(let i=3;i<length;i+=5) rect(c,i%2 ? '#607e4c' : '#94a75f',x+(i%2 ? -2:0),y+i,3,2);
+  c.strokeStyle='#48673f'; c.lineWidth=.9;
+  c.beginPath(); c.moveTo(x,y); c.quadraticCurveTo(x-1.2,y+length*.6,x+.5,y+length); c.stroke();
+  for(let dy=2;dy<length;dy+=3.5) {
+    const side=dy%7<3 ? 1 : -1;
+    facet(c,side===1?'#82a854':'#557c49',[x,y+dy+1,x+side*3,y+dy-1,x+side*2,y+dy+2,x,y+dy+3]);
+  }
 }
 
-function platformFace(c, theme, id, p) {
-  const {x,y,w,h}=p;
-  rect(c,theme.joint,x,y,w,h);
-  rect(c,theme.face,x+1,y+3,w-2,Math.max(1,h-4));
-  const bw=id==='waterpark' ? 9 : id==='store' ? 29 : 17;
-  const bh=id==='waterpark' ? 9 : id==='store' ? 7 : 10;
-  // All texturing stays inside the actual bounds, including short flying platforms.
-  c.save();
-  c.beginPath(); c.rect(x+1,y+3,w-2,Math.max(0,h-4)); c.clip();
-  for(let row=0,py=y+5;py<y+h;row++,py+=bh) {
-    const offset=(row%2 && id!=='waterpark') ? Math.floor(bw/2):0;
-    const band=py+bh-1;
-    rect(c,theme.shade,x,band,w,1);
-    for(let px=x-offset;px<x+w;px+=bw) {
-      const seed=Math.abs((px*47 + py*23)%103);
-      if(id==='end') {
-        rect(c,theme.shade,px+seed%10+2,py+3,3,2);
-        rect(c,theme.light,px+seed%10+2,py+5,3,1);
-      } else {
-        rect(c,theme.shade,px,py,1,bh-1);
-        rect(c,theme.light,px+2,py+1,2+seed%6,1);
-        if(id==='store') rect(c,theme.shade,px+7+seed%9,py+4,4,1);
-        else if(seed%4===0) rect(c,theme.shade,px+4,py+5,3,1);
-      }
+const blocks = {
+  temple:[24,12], arcade:[34,14], waterpark:[9,9], store:[44,8],
+  nether:[21,12], castle:[26,11], end:[22,13],
+};
+
+function blockFinish(c,id,t,x,y,w,h,seed) {
+  if(id==='store') {
+    c.strokeStyle='rgba(76,44,32,.34)'; c.lineWidth=.55; c.beginPath();
+    c.moveTo(x+2,y+h*.42);
+    c.bezierCurveTo(x+w*.36,y+h*.16,x+w*.65,y+h*.90,x+w-2,y+h*.49);
+    c.stroke();
+    if(seed%3===0) {
+      c.beginPath(); c.ellipse(x+w*.61,y+h*.48,2.6,.72,-.06,0,Math.PI*2); c.stroke();
+    }
+  } else if(id==='arcade') {
+    for(const dx of [2,w-3]) {
+      c.fillStyle=t.shade; c.beginPath(); c.arc(x+dx,y+2,.85,0,Math.PI*2); c.fill();
+      line(c,'#c5c5da',x+dx-.5,y+1.8,x+dx+.2,y+1.5,.45);
+    }
+    line(c,'rgba(211,213,243,.42)',x+5,y+h-3,x+w-7,y+h-3,.65);
+  } else if(id==='waterpark') {
+    facet(c,'rgba(224,255,250,.14)',[x+.8,y+.7,x+w-1,y+.7,x+w-2,y+2,x+1,y+h*.54]);
+    if(seed%5===0) {
+      line(c,'rgba(239,255,250,.45)',x+1.4,y+h-2.3,x+3.4,y+h-2.8,.4);
+    }
+  } else if(id==='end') {
+    for(let i=0;i<3;i++) {
+      const cx=x+2+((seed+i*37)%(w-5)),cy=y+3+(seed*(i+1)%(h-6));
+      facet(c,'rgba(88,74,65,.30)',[cx,cy,cx+2,cy-.6,cx+3.3,cy+1,cx+1.5,cy+2,cx-.8,cy+.9]);
+      line(c,'rgba(249,231,183,.55)',cx-.5,cy+1,cx+1.3,cy+2,.45);
+    }
+  } else {
+    // A split facet on hand-cut stone and pinholes in its lit top edge.
+    facet(c,'rgba(28,38,50,.12)',[x+w-4,y+1,x+w-.6,y+1,x+w-.6,y+h-1,x+w-2,y+h-2,x+w-3,y+h*.52]);
+    if(seed%4===0) {
+      line(c,'rgba(30,34,39,.42)',x+w*.26,y+1.5,x+w*.32,y+3.5,.6);
+      line(c,'rgba(30,34,39,.42)',x+w*.32,y+3.5,x+w*.26,y+h*.65,.56);
+    }
+    for(let i=0;i<3;i++) {
+      const cx=x+2+((seed*7+i*19)%(w-5)),cy=y+2+((seed*11+i*7)%(h-4));
+      line(c,i===1?'rgba(247,238,207,.30)':'rgba(38,39,46,.23)',cx,cy,cx+1+(seed%3),cy-.45,.45);
     }
   }
-  if(id==='arcade') {
-    for(let px=x+6;px<x+w;px+=32) {
-      line(c,theme.shade,px,y+7,px+11,y+18,2);
-      line(c,theme.light,px+11,y+17,px+22,y+7,1);
+}
+
+function platformFace(c,t,id,p) {
+  const {x,y,w,h}=p, [bw,bh]=blocks[id];
+  c.fillStyle=t.joint; c.fillRect(x,y,w,h);
+  c.save(); c.beginPath(); c.rect(x+.65,y+3,w-1.3,h-3); c.clip();
+  for(let row=0,py=y+4;py<y+h;row++,py+=bh) {
+    const offset=(row%2 && id!=='waterpark') ? bw/2 : 0;
+    const paint=gradient(c,py,bh,[[0,t.light],[.18,t.face],[.75,t.face],[1,t.shade]]);
+    for(let px=x-offset;px<x+w;px+=bw) {
+      const seed=Math.abs((px*47 + py*23)%103)|0;
+      c.fillStyle=paint; c.fillRect(px+.5,py+.4,bw-.8,bh-.65);
+      c.fillStyle='rgba(24,27,38,'+(seed%13)/110+')';
+      c.fillRect(px+.5,py+.4,bw-.8,bh-.65);
+      line(c,'rgba(251,244,208,.38)',px+1,py+bh-1.3,px+1,py+1,.54);
+      line(c,'rgba(251,244,208,.33)',px+1,py+.9,px+bw-1.3,py+.9,.48);
+      blockFinish(c,id,t,px,py,bw,bh,seed);
     }
   }
   if(id==='nether') {
-    for(let px=x+12;px<x+w;px+=38) {
-      const py=y+15+(px%9);
-      line(c,'#bd6654',px,py,px+5,py+1);
-      line(c,'#e08c61',px+5,py+1,px+8,py-2);
-      rect(c,'#b46850',px+8,py-2,4,1);
+    for(let px=x+12;px<x+w;px+=49) {
+      const py=y+14+(px%15);
+      c.save(); c.shadowBlur=3; c.shadowColor='#fb743b';
+      line(c,'#d78153',px,py,px+4,py-2,.85);
+      line(c,'#ffb061',px+4,py-2,px+6,py+1,.75);
+      line(c,'#e88f64',px+6,py+1,px+9,py,.65); c.restore();
     }
   }
-  c.restore();
+  c.fillStyle=gradient(c,y,h,[[0,'rgba(12,19,27,.29)'],[.17,'rgba(12,19,27,.02)'],[1,'rgba(12,19,27,.32)']]);
+  c.fillRect(x,y,w,h); c.restore();
 }
 
 function surface(c,t,id,p) {
   const {x,y,w}=p;
-  rect(c,t.top,x,y,w,4);
-  rect(c,t.rim,x,y,w,1);
-  rect(c,t.shade,x,y+4,w,1);
-  for(let dx=3;dx<w-3;dx+=id==='waterpark'?11:16) {
+  c.fillStyle=gradient(c,y,5,[[0,t.rim],[.2,t.top],[.77,t.top],[1,t.shade]]);
+  c.fillRect(x,y,w,5);
+  line(c,'rgba(255,248,213,.76)',x+.5,y+.4,x+w-.5,y+.4,.65);
+  for(let dx=3;dx<w-4;dx+=id==='waterpark'?11:16) {
     if(id==='temple') {
-      rect(c,t.top,x+dx,y+3,3+(dx%4),2+(dx%3));
-      if(dx%3===0) vine(c,x+dx+1,y+5,5+dx%8);
+      const length=3+dx%5;
+      facet(c,'#709052',[x+dx,y+2,x+dx+length,y+2.6,x+dx+length-2,y+5,x+dx+1,y+6]);
+      if(dx%3===0) vine(c,x+dx+1,y+4,5+dx%8);
     } else if(id==='arcade') {
-      rect(c,'#f7c778',x+dx,y+1,6,2);
-      rect(c,'#d88474',x+dx+7,y+1,5,2);
-    } else if(id==='store') {
-      rect(c,t.rim,x+dx,y+2,5,1);
+      facet(c,'#ffd58c',[x+dx+1,y+1.3,x+dx+6,y+1.3,x+dx+4,y+3.5,x+dx-1,y+3.5]);
     } else {
-      rect(c,t.shade,x+dx,y+1,1,2);
+      line(c,t.shade,x+dx+1.1,y+1.1,x+dx,y+3.8,.68);
+      line(c,t.rim,x+dx+1.9,y+1.1,x+dx+.8,y+3.6,.55);
     }
   }
 }
@@ -126,42 +184,50 @@ function masonryDetail(c,id,t,x,y) {
 function bridge(c,t,id,p) {
   const {x,y,w,h}=p;
   const depth=Math.max(4,Math.min(h,12));
-  rect(c,t.joint,x,y+2,w,depth-2);
-  rect(c,t.top,x,y,w,4);
-  rect(c,t.rim,x,y,w,1);
-  for(let i=0;i<w;i+=8) {
-    rect(c,t.shade,x+i,y+1,1,3);
-    if(i+4<w) rect(c,t.light,x+i+2,y+1,3,1);
+  c.fillStyle=gradient(c,y,depth,[[0,t.top],[.42,t.shade],[1,t.joint]]);
+  c.fillRect(x,y,w,depth);
+  for(let i=1;i<w-3;i+=8) {
+    const length=Math.min(7,w-i-1);
+    c.fillStyle=gradient(c,y,3.5,[[0,t.rim],[.42,t.top],[1,t.face]]);
+    c.fillRect(x+i,y,length,3.5);
+    line(c,'rgba(255,246,211,.6)',x+i+.6,y+.6,x+i+length-.6,y+.6,.65);
   }
-  for(let i=2; i+13<w;i+=16) {
-    line(c,t.face,x+i,y+4,x+i+5,y+depth-2);
-    line(c,t.light,x+i+6,y+depth-2,x+i+12,y+4);
+  for(let i=2;i+13<w;i+=16) {
+    line(c,t.face,x+i,y+4,x+i+5,y+depth-1,1.8);
+    line(c,t.light,x+i+5,y+depth-1,x+i+12,y+4,1.3);
+    c.fillStyle=t.light;c.beginPath();c.arc(x+i+1,y+4.5,.8,0,Math.PI*2);c.fill();
   }
-  rect(c,t.shade,x+1,y+depth-1,w-2,1);
-  if(id==='temple') for(let i=10;i<w-3;i+=27) vine(c,x+i,y+depth,5+i%7);
+  line(c,t.light,x,y+depth-.7,x+w,y+depth-.7,.7);
 }
 
 function ledge(c,t,id,p) {
   const {x,y,w,h}=p;
-  const depth=Math.max(4,Math.min(10,h));
-  rect(c,t.joint,x,y+1,w,depth-2);
-  rect(c,t.face,x+1,y+2,w-2,depth-3);
-  rect(c,t.rim,x,y,w,1);
-  rect(c,t.top,x+1,y+1,w-2,2);
-  for(let dx=4;dx<w-3;dx+=10) {
-    rect(c,t.light,x+dx,y+4,4,1);
-    if(dx+2<w-2) rect(c,t.shade,x+dx+1,y+depth-2,3,1);
+  const body=gradient(c,y,h,[[0,t.rim],[.28,t.top],[.4,t.shade],[.54,t.face],[1,t.joint]]);
+  facet(c,body,[x,y,x+w,y,x+w,y+h-2,x+w-2,y+h,x+2,y+h,x,y+h-2]);
+  line(c,'rgba(255,249,217,.85)',x+.5,y+.45,x+w-.5,y+.45,.8);
+  const section=id==='store'?21:12;
+  for(let dx=4;dx<w-4;dx+=section) {
+    line(c,'rgba(39,46,53,.44)',x+dx+.7,y+1,x+dx,y+h-1,.6);
+    line(c,t.light,x+dx+1.5,y+1,x+dx+1,y+3,.5);
   }
-  if(id==='waterpark' || id==='arcade') {
-    rect(c,t.accent,x+2,y+depth-1,w-4,1);
+  if(id==='arcade' || id==='waterpark') {
+    const color=id==='arcade'?'#ffd882':'#bff8eb';
+    line(c,t.accent,x+3,y+h-1.6,x+w-3,y+h-1.6,1.25);
+    for(let dx=5;dx<w-4;dx+=8) line(c,color,x+dx,y+h-1.6,x+dx+2,y+h-1.6,.7);
+  } else if(id==='temple') {
+    vine(c,x+5,y+h-1,5+w%8);
+    vine(c,x+w-11,y+h-1,3+w%5);
+  } else if(id==='nether' || id==='end' || id==='castle') {
+    for(let dx=7;dx<w-6;dx+=19) {
+      const xx=x+dx, yy=y+h-1, drop=2+Math.abs(xx%3);
+      facet(c,t.joint,[xx,yy,xx+8,yy,xx+5,yy+drop,xx+2,yy+drop-.5]);
+      line(c,t.face,xx+.6,yy+.3,xx+2,yy+drop-1,.6);
+    }
   }
 }
 
 export function terrainLayer(level,viewHeight) {
-  const image=document.createElement('canvas');
-  image.width=level.width;
-  image.height=viewHeight;
-  const c=image.getContext('2d'), t=THEMES[level.id];
+  const {image,c}=layerCanvas(level.width,viewHeight), t=THEMES[level.id];
   for(const p of level.platforms) {
     if(p.kind==='bridge') bridge(c,t,level.id,p);
     else if(p.kind==='ledge') ledge(c,t,level.id,p);
@@ -227,13 +293,11 @@ function farObject(c,id,t,x,y) {
 }
 
 export function midgroundLayer(level,viewWidth,viewHeight) {
-  const image=document.createElement('canvas');
   // An independent slower layer allows the skyline to slide behind the platforms.
-  image.width=viewWidth+Math.ceil((level.width-viewWidth)*.36);
-  image.height=viewHeight;
-  const c=image.getContext('2d'), t=THEMES[level.id];
+  const width=viewWidth+Math.ceil((level.width-viewWidth)*.36);
+  const {image,c}=layerCanvas(width,viewHeight), t=THEMES[level.id];
   const horizon=187;
-  for(let i=0,x=-12;x<image.width+30;i++,x+=41) {
+  for(let i=0,x=-12;x<width+30;i++,x+=41) {
     const y=horizon + Math.round(3*Math.sin(i*1.64));
     rect(c,t.abyss,x,y,42,viewHeight-y);
     if(i%2===1) farObject(c,level.id,t,x+10,y);
@@ -241,19 +305,42 @@ export function midgroundLayer(level,viewWidth,viewHeight) {
   return image;
 }
 
+// Sparse lights and airborne motes sit behind the play plane; their pace follows the weather.
+const air = {
+  temple: ['#e6edb3', .75, 2.4], arcade: ['#ffe9bf', 1, -1.9],
+  waterpark: ['#ddf8fa', .85, -7], store: ['#ffeac9', .55, 1.6],
+  nether: ['#ffc277', 1.05, -6], castle: ['#f8dea8', .8, -1.7], end: ['#eac7ff', 1, -2.5],
+};
+function driftingLight(c,id,time,camera,width) {
+  const [color,size,speed]=air[id];
+  c.save(); c.fillStyle=color;
+  for(let i=0;i<15;i++) {
+    const plane=.21+(i%3)*.13;
+    const x=((i*137+Math.sin(time*.54+i*3.4)*3-camera*plane)%(width+10)+width+10)%(width+10)-5;
+    const y=23+((i*83.7+time*speed)%147+147)%147;
+    c.globalAlpha=.10+.20*(.5+.5*Math.sin(time*1.6+i*2.3));
+    c.beginPath(); c.ellipse(x,y,size*(.7+i%3*.18),size*.63,-.52,0,2*Math.PI); c.fill();
+  }
+  c.restore();
+}
+
 export function drawDepth(c,level,camera,time,width,height) {
   const id=level.id,t=THEMES[id];
+  driftingLight(c,id,time,camera,width);
   const hot=id==='nether', wet=id==='waterpark' || id==='temple';
-  const base=hot ? 207 : 211;
-  rect(c,t.abyss,0,base,width,height-base);
-  if(hot||wet) {
-    const phase=Math.floor(time*6);
-    for(let i=-1;i<width/13+1;i++) {
-      const x=i*13-(Math.floor(camera*.58)%13);
-      const dy=(i+phase)%4===0 ? -1:0;
-      rect(c,hot?'#ec713a':id==='waterpark'?'#66babc':'#54968a',x,base+dy,10,1);
-      rect(c,hot?'#c74732':'#457c82',x+3,base+3+dy,7,1);
-      if(hot && (i+phase)%7===0) rect(c,'#ffae4d',x+4,base-3,2,2);
-    }
+  const base=hot ? 205 : 210;
+  if(!hot && !wet) return;
+  const water=id==='waterpark';
+  const surface=hot?'#ffae56':water?'#86dbdc':'#80b7a7';
+  c.fillStyle=gradient(c,base,Math.max(1,height-base),[
+    [0,surface],[.16,hot?'#df693a':water?'#4199aa':'#50867e'],[1,t.abyss],
+  ]);
+  c.fillRect(0,base,width,height-base);
+  for(let i=-1;i<width/12+1;i++) {
+    const x=i*12-camera*.55%12;
+    const wave=Math.sin(time*2+i*.78);
+    const y=base+.35+wave*.75;
+    line(c,surface,x,y,x+5+wave*2,y-.4,.75);
+    if(hot && i%3===0) line(c,'#ffb458',x+5,y+3,x+8,y+2.6,.65);
   }
 }

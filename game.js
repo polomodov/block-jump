@@ -1,6 +1,6 @@
 import { LEVELS } from './levels.js';
 import { createRun } from './physics.js?v=guitar-solo-1';
-import { drawRun } from './renderer.js?v=guitar-solo-1';
+import { drawRun } from './renderer.js?v=studio-1';
 import { playSound, setSoundEnabled, stopGuitar } from './audio.js?v=guitar-solo-1';
 
 const byId = id => document.getElementById(id);
@@ -133,7 +133,7 @@ for (const item of LEVELS) {
   const panorama = element('span', 'panorama');
   panorama.setAttribute('aria-hidden', 'true');
   const atlas = rows === 4 ? 'world-panoramas' : 'realm-panoramas';
-  panorama.style.backgroundImage = 'url("./assets/' + atlas + '.png")';
+  panorama.style.backgroundImage = 'url("./assets/' + atlas + '.webp")';
   panorama.style.backgroundSize = 'auto ' + rows * 100 + '%';
   panorama.style.backgroundPosition = '73% ' + row / (rows - 1) * 100 + '%';
   card.append(radio, panorama, element('span', 'level-name', item.title));

@@ -1,8 +1,9 @@
-import { THEMES, rect, terrainLayer, midgroundLayer, drawDepth } from './world-art.js';
+import { configureBoard } from './display.js';
+import { drawHero, drawBeast } from './actors-art.js';
+import { THEMES, rect, terrainLayer, midgroundLayer, drawDepth } from './world-art.js?v=studio-1';
 
 const WIDTH=480, HEIGHT=216;
-const actorColumns=['kirill','maxim','mom','dad','zombie','creeper','slime','skeleton','drowned','guardian','spider','witch','magma_cube','blaze','ghost','pumpkin_guard','enderman','shulker','pasha'];
-const imageFiles={world:'world-panoramas.png',realm:'realm-panoramas.png',actors:'platform-actors.png?v=family-five-1'};
+const imageFiles={world:'world-panoramas.webp',realm:'realm-panoramas.webp'};
 const images=new Map(), scenes=new WeakMap();
 
 function sheet(key) {
@@ -19,10 +20,10 @@ function sceneFor(canvas,level) {
   const cached=scenes.get(canvas);
   if(cached?.level===level) return cached;
   const haze=canvas.getContext('2d').createLinearGradient(0,30,0,187);
-  haze.addColorStop(0,'rgba(16,24,36,0.16)');
-  haze.addColorStop(.5,'rgba(16,24,36,0.28)');
-  haze.addColorStop(.82,'rgba(16,24,36,0.43)');
-  haze.addColorStop(1,THEMES[level.id].fog);
+  haze.addColorStop(0,'rgba(16,24,36,0.02)');
+  haze.addColorStop(.5,'rgba(16,24,36,0.09)');
+  haze.addColorStop(.82,'rgba(16,24,36,0.31)');
+  haze.addColorStop(1,'rgba(25,34,45,0.62)');
   const scene={level,haze,terrain:terrainLayer(level,HEIGHT),scenery:midgroundLayer(level,WIDTH,HEIGHT)};
   scenes.set(canvas,scene);
   return scene;
@@ -32,25 +33,34 @@ function drawLandscape(c,t,scene,level,camera) {
   const atlas=sheet(t.sheet);
   rect(c,t.fog,0,0,WIDTH,HEIGHT);
   if(atlas) {
-    const h=187, w=Math.round(h*4.8);
+    const h=187, row=atlas.naturalHeight/(t.sheet==='world'?4:3), w=h*atlas.naturalWidth/row;
     const progress=camera/Math.max(1,level.width-WIDTH);
-    const scroll=Math.round(153+progress*(w-WIDTH-153));
-    c.drawImage(atlas,0,t.row*100,480,100,-scroll,-3,w,h);
+    const scroll=153+progress*(w-WIDTH-153);
+    c.drawImage(atlas,0,t.row*row,atlas.naturalWidth,row,-scroll,-3,w,h);
   }
   // Atmospheric perspective separates the detailed vista from collision surfaces.
   c.fillStyle=scene.haze; c.fillRect(0,0,WIDTH,HEIGHT);
-  c.drawImage(scene.scenery,-Math.round(camera*.36),0);
+  const density=scene.scenery.height/HEIGHT;
+  c.drawImage(scene.scenery,-camera*.36,0,scene.scenery.width/density,HEIGHT);
 }
 
-function gem(c,x,y,t) {
-  x=Math.round(x); y=Math.round(y + Math.sin(t*3.1+x*.17)*1.25);
-  rect(c,'#143b37',x-2,y-5,5,11); rect(c,'#143b37',x-4,y-3,9,7);
-  rect(c,'#299758',x-3,y-3,7,7); rect(c,'#67ee80',x-2,y-4,5,2);
-  rect(c,'#bffba4',x-2,y-3,2,5); rect(c,'#51da72',x,y-2,2,5);
-  rect(c,'#27af71',x+2,y-2,1,5); rect(c,'#218b62',x-2,y+3,5,1);
-  if((Math.floor(t*4)+Math.round(x))%9===0) {
-    rect(c,'#e8ffdb',x-3,y-5,4,1); rect(c,'#e8ffdb',x-1,y-7,1,4);
-  }
+const gemCut = [
+  ['#a9ffe1',new Path2D('M0 -5.75L3.1 -3.6 1.5 -1.75 -1.4 -1.75 -3.15 -3.6Z')],
+  ['#60ecad',new Path2D('M-3.15 -3.6L-1.4 -1.75 -1.4 2.7 0 5.75 -3.55 3.15Z')],
+  ['#22c789',new Path2D('M-1.4 -1.75L1.5 -1.75 1.5 2.7 0 5.75 -1.4 2.7Z')],
+  ['#118d72',new Path2D('M1.5 -1.75L3.1 -3.6 3.5 3.1 0 5.75 1.5 2.7Z')],
+];
+const gemRim=new Path2D('M0 -5.75L3.1 -3.6 3.5 3.1 0 5.75 -3.55 3.15 -3.15 -3.6Z');
+function gem(c,x,y,time) {
+  const cycle=time*2.8+x*.12;
+  c.save(); c.translate(x,y+Math.sin(cycle)*1.2); c.scale(.82+Math.cos(cycle)*.16,1);
+  c.lineWidth=1.25;c.strokeStyle='#195c52';c.lineJoin='round';c.stroke(gemRim);
+  for(const [ink,facet] of gemCut){c.fillStyle=ink;c.fill(facet);}
+  c.strokeStyle='#dcffe8';c.lineWidth=.57;c.beginPath();
+  c.moveTo(-3.1,-3.55);c.lineTo(-1.45,-1.75);c.lineTo(-1.45,1.65);c.stroke();
+  const shine=Math.sin(time*4.1+x);
+  if(shine>.72){const r=(shine-.72)*7;c.strokeStyle='#f5ffef';c.lineWidth=.6;c.beginPath();c.moveTo(2.85-r,-3.2);c.lineTo(2.85+r,-3.2);c.moveTo(2.85,-3.2-r*1.4);c.lineTo(2.85,-3.2+r*1.4);c.stroke();}
+  c.restore();
 }
 
 function checkpoint(c,x,y,on,time) {
@@ -69,95 +79,55 @@ function flag(c,x,y,t,time) {
   rect(c,'#303c42',x-7,y-4,15,4); rect(c,t.light,x-5,y-5,11,2);
   rect(c,'#2b3540',x-2,y-47,5,43); rect(c,'#dfcca1',x-1,y-46,2,40);
   rect(c,'#f8e6a7',x-2,y-49,5,3);
-  const flutter=Math.floor(time*3)%2;
-  for(let i=0; i<5; i++) {
-    const py=y-45+(i>2 ? flutter : 0);
-    rect(c,'#29353b',x+2+i*4,py,4,14);
-    for(let j=0; j<3;j++) rect(c,(i+j)%2 ? '#384957' : '#fff2cd',x+2+i*4,py+1+j*4,4,4);
+  // Move the fly edge freely while the hoist stays on the pole.
+  const clothY=(dx,dy)=>y-45+dy + dx/21*(Math.sin(time*5.2+dx*.25)*2.2+dy*.06);
+  for(let i=0;i<5;i++) {
+    const left=i*4.2,right=left+4.2;
+    for(let j=0;j<3;j++){
+      const top=j*4.4,bottom=top+4.5;
+      c.fillStyle=(i+j)%2?'#384957':'#fff2cd';c.beginPath();
+      c.moveTo(x+2+left,clothY(left,top));c.lineTo(x+2+right+.12,clothY(right,top));
+      c.lineTo(x+2+right+.12,clothY(right,bottom));c.lineTo(x+2+left,clothY(left,bottom));c.closePath();c.fill();
+    }
   }
 }
 
-const airborne=new Set(['blaze','guardian','ghost']);
-const hoppers=new Set(['slime','magma_cube']);
-function pose(actor,hero=false) {
-  if(hero && !actor.onGround) return 3;
-  if(actor.stun>0 || Math.abs(actor.vx||0)<1) return 0;
-  if(!hero && (airborne.has(actor.type)||hoppers.has(actor.type)||actor.type==='shulker')) return 0;
-  return 1+(Math.floor(Math.abs(actor.x)/5)%2);
-}
-
-function figure(c,atlas,id,actor,frame,cam) {
-  const cx=Math.round(actor.x+actor.w/2-cam), foot=Math.round(actor.y+actor.h);
-  const size=Math.max(14,Math.min(27,actor.h));
-  const width=Math.round(size*24/16),height=Math.round(size*20/16);
-  const facing=actor.facing ?? (actor.vx<0 ? -1:1);
-  if(atlas) {
-    c.save(); c.translate(cx,foot); c.scale(facing<0 ? -1:1,1);
-    const col=actorColumns.indexOf(id);
-    if(col>=0) c.drawImage(atlas,col*24,frame*20,24,20,-Math.floor(width/2),-height,width,height);
-    c.restore();
-  } else {
-    rect(c,'#403a44',cx-5,foot-size,10,size);
-    rect(c,'#dfbb95',cx-4,foot-size+1,8,6);
-  }
-}
-
-const guitarPixels=[
-  '...............qs', '..............qtq', '.............qcs.',
-  '.....qqq....qcsq.', '..qqqtrrqq.qcsq..', '.qtrrrhrrqqcsq...',
-  'qtrwhhhrrqcsq....', 'qtrrrhrrscsq.....', 'qtbbrsrrrqq......',
-  '.qrbbrrqq........', '..qrrrq..........', '...qqq...........',
-];
-const guitarInks={q:'#312337',r:'#dc634b',t:'#ffa572',h:'#592d36',s:'#fff2be',c:'#ab784e',w:'#fff2cb',b:'#94423e'};
-let guitarImage;
+const guitarBody=new Path2D('M-5 -1C-4 -2.9 -2.8 -1.6 -2 -2.4C-1 -4 -.3 -3.9 .75 -3.15L2 -1.4C2.5 .2 .1 .4 -.5 1.8C-.9 3.2 -2.5 4.55 -4.05 4.45C-7.8 4.1 -8.15 .2 -5 -1Z');
 
 function drawGuitar(c,x,y,age,facing) {
-  if(!guitarImage) {
-    guitarImage=document.createElement('canvas');
-    guitarImage.width=guitarPixels[0].length;
-    guitarImage.height=guitarPixels.length;
-    const pixels=guitarImage.getContext('2d');
-    guitarPixels.forEach((row,py)=>{
-      for(let px=0;px<row.length;px++) {
-        const ink=guitarInks[row[px]];
-        if(ink) rect(pixels,ink,px,py,1,1);
-      }
-    });
-  }
-  c.save();
-  c.translate(x,y); c.scale(facing,1);
-  c.drawImage(guitarImage,-6,-6);
-  const strum=Math.floor(age*9)%2;
-  rect(c,'#cf956e',-3,1-strum*2,3,2);
-  rect(c,'#f7cf9f',-2,2-strum*2,3,1);
-  rect(c,'#f7cf9f',5,-2,2,2);
+  c.save();c.translate(x+.2,y+.55);c.scale(facing,1);
+  c.rotate(Math.sin(age*14)*.025);
+  c.lineCap='round';c.lineJoin='round';
+  c.fillStyle='#d17142';c.strokeStyle='#4d3137';c.lineWidth=.72;
+  c.fill(guitarBody);c.stroke(guitarBody);
+  c.fillStyle='#ffd397';c.beginPath();c.ellipse(-3.35,.45,1.35,1.5,.63,0,Math.PI*2);c.fill();
+  c.fillStyle='#643e37';c.beginPath();c.arc(-3.35,.45,.96,0,Math.PI*2);c.fill();
+  c.beginPath();c.moveTo(-2.75,.1);c.lineTo(5.95,-5.45);c.strokeStyle='#513b39';c.lineWidth=1.9;c.stroke();
+  c.strokeStyle='#f0cc87';c.lineWidth=.52;c.stroke();
+  c.fillStyle='#a6784c';c.translate(6.2,-5.7);c.rotate(-.48);c.fillRect(-1,-.86,2.5,1.65);c.rotate(.48);c.translate(-6.2,5.7);
+  const strum=Math.sin(age*30)*.9;
+  c.fillStyle='#edb48c';c.beginPath();c.ellipse(-2.6,.45+strum,1.1,.8,-.5,0,2*Math.PI);c.fill();
+  c.beginPath();c.ellipse(3.1,-3.6,.72,1,.4,0,2*Math.PI);c.fill();
   c.restore();
 }
 
 function musicNote(c,x,y,color) {
-  const outline='#302238';
-  rect(c,outline,x+2,y,5,4);
-  rect(c,outline,x+2,y+3,3,4);
-  rect(c,outline,x-1,y+5,5,4);
-  rect(c,color,x+3,y+1,1,6);
-  rect(c,color,x+4,y+1,2,2);
-  rect(c,color,x,y+6,3,2);
+  c.save();c.translate(x+1,y+.6);
+  c.strokeStyle='#392a42';c.fillStyle=color;c.lineWidth=1.05;
+  c.beginPath();c.moveTo(2.25,6.05);c.lineTo(2.25,.1);
+  c.quadraticCurveTo(5.8,.5,5.2,3.12);c.quadraticCurveTo(4.45,2.05,3.05,1.97);
+  c.lineTo(3.05,6.25);c.bezierCurveTo(3.05,8.3,-1.55,8.5,-.9,6.28);c.quadraticCurveTo(.05,4.8,2.25,5.45);c.closePath();c.stroke();c.fill();c.restore();
 }
 
 function drawSoundWave(c,solo,camera) {
   const alpha=Math.max(0,Math.min(1,(.93-solo.age)/.33));
   if(!alpha) return;
   const x=solo.x-camera, y=solo.y, radius=solo.front;
-  // Pixel dashes preserve the view of the platforms through the expanding wave.
-  const count=Math.max(16,Math.round(radius*.75));
   c.save();
-  c.globalAlpha=alpha*.78;
-  for(let i=0;i<count;i++) {
-    const angle=2*Math.PI*i/count;
-    const dx=Math.cos(angle)*radius, dy=Math.sin(angle)*radius;
-    rect(c,'#354249',x+dx,y+dy,3,3);
-    rect(c,'#a3ead6',x+dx,y+dy,2,2);
-  }
+  c.lineWidth=1.35;c.strokeStyle='#95f6ed';c.globalAlpha=alpha*.71;c.setLineDash([2.35,4.8]);
+  c.beginPath();c.arc(x,y,radius,0,Math.PI*2);c.stroke();
+  c.setLineDash([]);c.globalAlpha=alpha*.16;c.lineWidth=3.6;
+  c.beginPath();c.arc(x,y,Math.max(1,radius-2.65),0,Math.PI*2);c.stroke();
   c.globalAlpha=alpha;
   for(const side of [-1,1]) {
     for(const [angle,color] of [[-.80,'#b3f5dc'],[-.19,'#ffc1dc']]) {
@@ -196,62 +166,59 @@ function playerEffects(c,s,cx,cy,front) {
   }
 }
 
-function enemy(c,atlas,actor,cam,time) {
-  const cx=Math.round(actor.x+actor.w/2-cam), y=Math.round(actor.y);
-  if(cx < -30 || cx>WIDTH+30 || !actor.alive) return;
-  const floor=Math.round(actor.baseY+actor.h);
-  rect(c,'rgba(23,23,34,.35)',cx-actor.w*.4,floor-1,Math.round(actor.w*.8),2);
-  c.save();
-  if(actor.stun>0) c.globalAlpha=.66;
-  let frame=pose(actor);
+function enemy(c,actor,cam,time) {
+  if(!actor.alive)return;
+  const cx=actor.x+actor.w/2-cam, y=actor.y;
+  if(cx < -30 || cx>WIDTH+30)return;
+  drawBeast(c,actor,cam,time);
   if(actor.dance>0) {
-    // Sway around the feet with a small hop on each beat; physics stays in world coordinates.
-    const beat=Math.sin(actor.dance*11);
-    const foot=Math.round(actor.y+actor.h);
-    c.translate(cx+Math.round(beat*2),foot-Math.round(Math.abs(beat)*4));
-    c.transform(1,0,beat*.11,1,0,0);
-    c.translate(-cx,-foot);
-    frame=beat>0 ? 1 : 2;
-  }
-  figure(c,atlas,actor.type,actor,frame,cam);
-  c.restore();
-  if(actor.dance>0) {
-    const beat=Math.floor(actor.dance*4);
-    const rise=Math.floor(actor.dance*12)%4;
-    musicNote(c,cx+(beat%2 ? 4 : -7),Math.max(1,y-16-rise),'#ffc1dc');
+    const beat=Math.sin(actor.dance*7);
+    musicNote(c,cx+beat*4-1,Math.max(1,y-15+beat*2),'#ffc1dc');
   } else if(actor.stun>0) {
-    const d=Math.floor(time*5)%3;
-    rect(c,'#ffe998',cx-5+d,y-3,3,1); rect(c,'#ffe998',cx+3-d,y-4,2,2);
+    const offset=Math.sin(time*6)*2;
+    rect(c,'#ffe998',cx-5+offset,y-3,3,1);rect(c,'#ffe998',cx+3-offset,y-4,2,2);
   }
 }
 
+function groundShadow(c,level,hero,camera) {
+  const x=hero.x+hero.w/2,feet=hero.y+hero.h;
+  let ground=Infinity;
+  for(const p of level.platforms) {
+    if(x>=p.x && x<=p.x+p.w && p.y>=feet-.01 && p.y<ground) ground=p.y;
+  }
+  const height=Math.max(0,ground-feet);
+  if(height>82) return;
+  const near=1-height/82;
+  c.save();c.globalAlpha=.12+.27*near;
+  c.fillStyle='#121923';c.beginPath();c.ellipse(x-camera,ground-.15,3.1+3.3*near,.65+.42*near,0,0,Math.PI*2);c.fill();
+  c.restore();
+}
+
 export function drawRun(canvas,state) {
-  if(canvas.width!==WIDTH) canvas.width=WIDTH;
-  if(canvas.height!==HEIGHT) canvas.height=HEIGHT;
-  const c=canvas.getContext('2d'), level=state.level, hero=state.player;
-  c.imageSmoothingEnabled=false;
+  const c=configureBoard(canvas,WIDTH,HEIGHT),level=state.level,hero=state.player;
+  c.imageSmoothingEnabled=true;
   const t=THEMES[level.id], time=state.time;
-  const camera=Math.round(Math.max(0,Math.min(level.width-WIDTH,hero.x-146)));
+  const camera=Math.max(0,Math.min(level.width-WIDTH,hero.x-146));
   const scene=sceneFor(canvas,level);
   drawLandscape(c,t,scene,level,camera);
   drawDepth(c,level,camera,time,WIDTH,HEIGHT);
   if(state.solo) drawSoundWave(c,state.solo,camera);
-  c.drawImage(scene.terrain,camera,0,WIDTH,HEIGHT,0,0,WIDTH,HEIGHT);
+  const density=scene.terrain.width/level.width;
+  c.drawImage(scene.terrain,camera*density,0,WIDTH*density,scene.terrain.height,0,0,WIDTH,HEIGHT);
   const post=level.checkpoint, end=level.flag;
   if(post.x>=camera-12 && post.x<camera+WIDTH+12) checkpoint(c,Math.round(post.x-camera),post.y,state.checkpointReached,time);
   if(end.x>=camera-30 && end.x<camera+WIDTH+8) flag(c,Math.round(end.x-camera),end.y,t,time);
   for(const item of state.gems) {
     if(!item.taken && item.x>camera-9 && item.x<camera+WIDTH+9) gem(c,item.x-camera,item.y,time);
   }
-  const atlas=sheet('actors');
-  for(const actor of state.enemies) enemy(c,atlas,actor,camera,time);
-  const cx=Math.round(hero.x+hero.w/2-camera),cy=Math.round(hero.y+hero.h/2);
-  if(hero.onGround) rect(c,'rgba(20,22,29,.5)',cx-6,Math.round(hero.y+hero.h)-1,13,2);
+  for(const actor of state.enemies) enemy(c,actor,camera,time);
+  const cx=hero.x+hero.w/2-camera,cy=hero.y+hero.h/2;
+  groundShadow(c,level,hero,camera);
   playerEffects(c,state,cx,cy,false);
   c.save();
   if(state.invulnerable>0 && Math.floor(time*8)%2===1) c.globalAlpha=.55;
   if(state.heroId==='mom' && state.abilityTime>0) c.globalAlpha=.48;
-  figure(c,atlas,state.heroId,hero,pose(hero,true),camera);
+  drawHero(c,state,camera);
   c.restore();
   playerEffects(c,state,cx,cy,true);
 }
