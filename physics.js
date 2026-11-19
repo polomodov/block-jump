@@ -1,5 +1,5 @@
-import { LEVELS } from './levels.js';
-import { advanceAction, advanceMonsterEffects, interruptAction } from './enemy-actions.js?v=monster-motion-1';
+import { LEVELS } from './levels.js?v=living-worlds-1';
+import { advanceAction, advanceMonsterEffects, interruptAction } from './enemy-actions.js?v=living-worlds-1';
 
 const RUN_SPEED = 132;
 const JUMP_SPEED = 322;
@@ -12,7 +12,7 @@ const FIRST_CHORD = 26, SOLO_RADIUS = 120, WAVE_DURATION = .6;
 const beasts = {
   zombie: [14,18,22], creeper: [13,16,27], slime: [16,12,23,'hop'], skeleton: [13,18,29],
   drowned: [14,17,22], guardian: [16,13,26,'float'], spider: [17,10,37], witch: [14,19,25],
-  magma_cube: [16,12,23,'hop'], blaze: [13,16,20,'float'], ghost: [14,15,25,'float'],
+  magma_cube: [16,12,16], ghast: [21,24,12,'drift'], blaze: [13,16,20,'float'], ghost: [14,15,25,'float'],
   pumpkin_guard: [16,18,21], enderman: [13,21,30], shulker: [15,13,0],
 };
 const powers = { kirill: 4, maxim: .35, mom: 4, dad: 3, pasha: 1.2 };
@@ -22,7 +22,7 @@ const remaining = (value,dt) => value <= dt+1e-8 ? 0 : value-dt;
 
 function spawnEnemy(def, index) {
   const [w,h,speed,motion] = beasts[def.type];
-  const hover = motion === 'float' ? 14 : 0;
+  const hover = motion === 'drift' ? 72 : motion === 'float' ? 14 : 0;
   return { ...def, y: def.y-h-hover, baseY: def.y-h, w, h, speed, motion,
     vx: index%2 ? speed : -speed, facing: index%2 ? 1 : -1,
     phase: index*.53, alive: true, stun: 0, dance: 0, action: null, actionCooldown: 0 };
@@ -44,7 +44,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     state.abilityTime = 0;
     state.solo = null;
     state.guitarStartedAt = null;
-    state.monsterEffects = state.monsterEffects.filter(e => e.kind !== 'arrow');
+    state.monsterEffects = state.monsterEffects.filter(e => e.kind !== 'arrow' && e.kind !== 'fireball');
     for (const enemy of state.enemies) {
       enemy.dance = 0;
       interruptAction(enemy);
@@ -111,6 +111,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       enemy.facing = enemy.x === enemy.minX ? 1 : -1;
     }
     enemy.phase += dt;
+    if (enemy.motion === 'drift') enemy.y = enemy.baseY-72-3*Math.sin(enemy.phase*2.1);
     if (enemy.motion === 'float') enemy.y = enemy.baseY-14-4*Math.sin(enemy.phase*2.4);
     if (enemy.motion === 'hop') {
       const t = enemy.phase % 1.9;
@@ -134,7 +135,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     for (const enemy of state.enemies) {
       if (!enemy.alive) continue;
       enemy.dance = remaining(enemy.dance,dt);
-      if (wave && enemy.dance === 0) {
+      if (wave && enemy.dance === 0 && enemy.action?.kind !== 'vault') {
         const dx = enemy.x+enemy.w/2-wave.x, dy = enemy.y+enemy.h/2-wave.y;
         if (Math.hypot(dx,dy) <= wave.front + 1e-8) {
           enemy.dance = 5;
@@ -144,7 +145,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       }
       if (enemy.dance > 0) continue;
       enemy.stun = remaining(enemy.stun,dt);
-      if (active && heroId === 'maxim' &&
+      if (active && heroId === 'maxim' && enemy.action?.kind !== 'vault' &&
           Math.abs(enemy.x+enemy.w/2-player.x-player.w/2) < 34 && Math.abs(enemy.y-player.y) < 24) {
         enemy.stun = 4;
       }

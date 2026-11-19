@@ -1,6 +1,6 @@
-import { LEVELS } from './levels.js';
-import { createRun } from './physics.js?v=monster-motion-1';
-import { drawRun } from './renderer.js?v=monster-motion-1';
+import { LEVELS } from './levels.js?v=living-worlds-1';
+import { createRun } from './physics.js?v=living-worlds-1';
+import { drawRun } from './renderer.js?v=living-worlds-1';
 import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
 import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
 
@@ -37,6 +37,8 @@ const heroes = {
   },
 };
 const monsterTips = {
+  ghast: 'У рта гаста растёт огненный шар. Пока гаст целится, сойди с линии выстрела.',
+  magma_cube: 'У берега лавы магмовый куб сжимается и прыгает. Оставь ему место для приземления.',
   creeper: 'Крипер раздувается перед взрывом. Успей отбежать, пока горит запал.',
   skeleton: 'Когда скелет натянет тетиву, приготовься перепрыгнуть стрелу.',
   enderman: 'Фиолетовый портал показывает, куда сейчас переместится эндермен.',

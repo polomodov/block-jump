@@ -1,3 +1,5 @@
+import { advanceNetherAction, moveFireball } from './nether-actions.js?v=living-worlds-1';
+
 // Distances are measured in course pixels. Warnings and their effects share the same clock.
 const bowRange = 104;
 const arrowSpeed = 116;
@@ -14,7 +16,7 @@ function pose(enemy, kind, duration) {
 }
 
 export function interruptAction(enemy) {
-  if (enemy.action) {
+  if (enemy.action && enemy.action.kind !== 'vault') {
     enemy.action = null;
     enemy.actionCooldown = .8;
   }
@@ -59,6 +61,7 @@ function startAction(enemy, state) {
 }
 
 export function advanceAction(enemy, state, dt, suppressed) {
+  if (enemy.type === 'ghast' || enemy.type === 'magma_cube') return advanceNetherAction(enemy, state, dt, suppressed);
   if (enemy.type !== 'creeper' && enemy.type !== 'skeleton' && enemy.type !== 'enderman') return false;
   if (suppressed) interruptAction(enemy);
   enemy.actionCooldown = Math.max(0, enemy.actionCooldown - dt);
@@ -109,7 +112,14 @@ export function advanceMonsterEffects(state, dt, protectedPlayer) {
   for (let i = state.monsterEffects.length - 1; i >= 0; i--) {
     const effect = state.monsterEffects[i];
     const step = Math.min(dt, effect.duration - effect.age);
-    if (effect.kind === 'arrow') {
+    if (effect.kind === 'fireball') {
+      const impact = moveFireball(effect, state, step, protectedPlayer);
+      if (impact) {
+        hit ||= impact === 'player';
+        Object.assign(effect, {kind: 'cinders', age: 0, duration: .34});
+        continue;
+      }
+    } else if (effect.kind === 'arrow') {
       const nextX = effect.x + effect.dir * arrowSpeed * step;
       const cx = Math.max(player.x, Math.min(nextX, player.x + player.w));
       const crossedHero = Math.min(effect.x, nextX) <= player.x + player.w &&

@@ -1,3 +1,4 @@
+import { drawNetherCreature } from './nether-creature-art.js?v=living-worlds-1';
 import { drawArrow } from './monster-action-art.js?v=monster-motion-1';
 import { beat, performanceAge, strokes } from './guitar.js?v=encore-1';
 
@@ -306,20 +307,70 @@ function archerPose(c, action) {
   oval(c,wx,wy,.97,.7,'#d9ddc7');oval(c,bx,by,.94,.75,'#e5e4cb');
 }
 
-function humanoid(c,id,gait,dancing,action) {
+// These props stay attached to the wrist for the entire walk cycle.
+function carriedFlask(c,x,y,swirl) {
+  c.save(); c.translate(x,y); c.rotate(swirl*.20);
+  shape(c,'M-.8 -1.2L-.9 .2Q-3.7 2.6 -2.35 4.5Q-1.15 5.75 1.65 5.1Q4.15 4.3 2.6 1.95L1.1 .15 1.1 -1.2Z',
+    '#b2b2c8','#403347',.68);
+  c.save(); c.translate(0,3.25); c.rotate(-swirl*.26);
+  shape(c,'M-2.16 -.3Q-.9 .12 -.25 -.25Q1.2 -.52 2.13 -.29Q3.06 1.77 .42 1.89Q-2 2.18 -2.16 -.3Z','#ae51bf');
+  oval(c,-.95,-.12,.48,.40,'#ffe5fb'); c.restore();
+  c.fillStyle='#d9a273'; c.fillRect(-1.15,-1.95,2.35,.94);
+  c.restore();
+}
+
+function carriedLantern(c,x,y,sway) {
+  c.save(); c.translate(x,y); c.rotate(sway*.38);
+  shape(c,'M-1.1 2.15Q-1.6 -.3 -.12 -.4Q1.42 -.55 1.17 2.16',null,'#524044',.69);
+  shape(c,'M-2.6 2.1L-.4 1.2 2.15 2.1 2.3 5.75 .12 6.5 -2.4 5.55Z','#f4ac4c','#49363e',.65);
+  oval(c,-.08,4.1,.89,1.32,'#fff3a2');
+  shape(c,'M-1.85 2.36L-1.65 5.55M1.37 2.36L1.3 5.61',null,'#9a622e',.50);
+  c.restore();
+}
+
+function patrolArms(c,id,gait,t,face) {
+  if (id==='zombie' || id==='drowned') {
+    // The zombie drags one arm. The drowned sweeps its hands back as if wading.
+    const wading=id==='drowned';
+    for(const side of [-1,1]) {
+      const swing=gait*side;
+      const handX=wading?2.7+4.25*swing : 4.2+side*1.65+swing*1.52;
+      const handY=wading?-8.1+swing*2.45 : -11.5+side*.8+Math.max(0,-swing)*2.3;
+      const shoulder=side*2.65;
+      stroke(c,shoulder,-11.1,shoulder+1.45,-9.2+swing*.9,handX,handY,face[2],2.35);
+      stroke(c,shoulder+.1,-11.15,shoulder+1.6,-9.5+swing*.9,handX+.12,handY-.28,face[0],1.5);
+      cube(c,handX-.5,handY-.48,1.95,.95,.65,face);
+    }
+    return;
+  }
+  const witch=id==='witch';
+  const sway=witch?Math.sin(t*3.3):gait;
+  const handX=witch?4.1+sway*1.8:4.35+gait*1.7;
+  const handY=witch?-11.25+Math.cos(t*3.3)*1.65:-6.85+Math.abs(gait)*.85;
+  stroke(c,-2.6,-11.15,-3.55-gait*1.05,-8.1,-3.5-gait*1.4,-5.65,face[2],1.75);
+  stroke(c,2,-11.15,2.75,-7.9+gait*.55,handX,handY,face[2],2.3);
+  stroke(c,2.1,-11.12,2.9,-8.15+gait*.55,handX+.1,handY-.2,face[0],1.52);
+  if(witch) carriedFlask(c,handX,handY,sway);
+  else carriedLantern(c,handX,handY,-sway);
+}
+
+function humanoid(c,id,gait,dancing,action,t) {
   const bone=id==='skeleton', dark=id==='enderman', pumpkin=id==='pumpkin_guard', witch=id==='witch';
   const face=bone?stone:dark?coal:pumpkin?fire:witch?['#aa8c81','#d3b8a0','#776575']:id==='drowned'?sea:zombie;
   const coat=bone?stone:dark?coal:pumpkin?['#686f46','#a5a060','#414c3e']:witch?purple:teal;
   const pants=bone?stone:dark?coal:pumpkin?red:violet;
+  const patrolling = !dancing && !bone && !dark;
+  const walkingLift = pumpkin?1.95:witch?1.08:1.4;
   for(const leg of [-1,1]) {
     const kick = dancing ? Math.max(0,leg*gait) : 0;
     const footX = leg*(1.25 + 2.9*kick) + (dancing ? 0 : gait*leg*1.85);
-    const footY = -.8 - kick*3.7;
+    const footY = -.8 - kick*3.7 - (patrolling ? Math.max(0,leg*gait)*walkingLift : 0);
     const kneeX = leg*(1.25 + kick*3.55) + (dancing ? 0 : gait*leg*1.38);
     stroke(c,leg*1.25,-6,kneeX,-3.5-kick*3,footX,footY,pants[2],bone||dark?1.05:2.05);
     cube(c,footX-.65,footY-.75,1.8,1.3,.7,pants);
   }
   c.save();c.translate(0,-Math.abs(gait)*.46);
+  if(patrolling) c.rotate(id==='zombie' ? .135+gait*.05 : gait*(witch?.1:.075));
   if(witch)shape(c,'M-2.8 -11.7L2 -11.7 4.1 -3Q.5 -2 -4.15 -3.3Z',coat[0],coat[2],.65);
   else cube(c,-2.15,-11.8,4.6,6.5,1.5,coat);
   if(bone) for(let i=0;i<3;i++){c.fillStyle=coal[0];c.fillRect(-1.6,-10.9+i*1.5,3.8,.62);}
@@ -344,15 +395,26 @@ function humanoid(c,id,gait,dancing,action) {
       const wrist=side*(4.2-Math.sin(charge*Math.PI/2)*3.3);
       stroke(c,side*2.5,-11,side*(4.4+charge),-6.4,wrist,-2-charge*8,side<0?coal[2]:coal[1],1.38);
     }
+  } else if(patrolling) {
+    patrolArms(c,id,gait,t,face);
   } else if(!aiming) {
     stroke(c,-2.95,-11.1,-2.7+gait,-8.4,-2.8+gait*2,reach,face[2],dark?1.05:1.62);
     stroke(c,2.5,-11.1,3.25-gait,-8.3,3.5-gait*1.8,reach,face[0],dark?1.1:1.78);
   }
   if(pumpkin){shape(c,'M-2.1 -10.7L1.8 -8.9M-.35 -11.4L-1.65 -8.4',null,'#cc9c61',.75);}
+  c.save();
+  if(patrolling){
+    c.translate(.4,-11.88);
+    c.rotate(witch?-.11+.14*Math.sin(t*3.3):gait*(pumpkin?.095:.145));
+    c.translate(-.4,11.88);
+  }
   cube(c,-2.7,-17.45,6.65,5.65,1.65,face);
   if(pumpkin) {
     shape(c,'M.3 -18.2Q-.4 -20 .8 -20.3L1.6 -20.1 .9 -18Z','#697c43');
-    shape(c,'M-1.9 -14.5L-.8 -16 0 -14.55ZM1.8 -14.6L2.75 -16.1 3.5 -14.65ZM-.9 -13.8L.25 -13.2 1.15 -13.75 2 -13.25 2.8 -13.7 2.25 -12.6 .15 -12.5Z','#552e36');
+    shape(c,'M-1.9 -14.5L-.8 -16 0 -14.55ZM1.8 -14.6L2.75 -16.1 3.5 -14.65ZM-.9 -13.8L.25 -13.2 1.15 -13.75 2 -13.25 2.8 -13.7 2.25 -12.6 .15 -12.5Z','#673b37');
+    c.save(); c.globalAlpha*=.7+.26*Math.sin(t*5.5);
+    shape(c,'M-1.58 -14.58L-.86 -15.55 -.23 -14.58ZM2.16 -14.66L2.76 -15.61 3.22 -14.68ZM-.45 -13.43L.32 -13.03 1.13 -13.44 1.95 -12.97 2.5 -13.28 2.06 -12.74 .31 -12.74Z','#ffe07a');
+    c.restore();
   }else if(dark) {
     c.fillStyle='#ef91f9';c.fillRect(-2.1,-14.7,2.1,.84);c.fillRect(1.85,-14.7,1.7,.84);
   }else{
@@ -365,12 +427,58 @@ function humanoid(c,id,gait,dancing,action) {
     shape(c,'M-2.7 -18L2.3 -17.9',null,'#bf9658',.68);
     oval(c,.5,-14,.72,1.1,'#c7a08d');
   }
+  c.restore(); // head
+  if (id==='drowned' && !dancing) {
+    for(let i=0;i<2;i++){
+      const rise=(t*.73+i*.47)%1;
+      c.save(); c.globalAlpha*=Math.sin(rise*Math.PI)*.78;
+      c.beginPath(); c.arc(-4.05-rise*2+Math.sin(rise*5),-12.2-rise*7,.48+rise*.72,0,Math.PI*2);
+      c.strokeStyle='#a4eee2'; c.lineWidth=.48; c.stroke(); c.restore();
+    }
+    shape(c,'M-2.8 -17.5L-.4 -17.45 -.9 -15.7 -1.6 -16.2 -1.95 -14.6 -2.7 -15.15Z','#669967');
+  }
   if (aiming) archerPose(c,action);
   else if (bone) bow(c,bowX,bowY,dancing?-.85+gait*.35:-.61+gait*.1,0,false);
   c.restore();
 }
+function slimeSpring(phase) {
+  // Match the 0.62-second airborne interval of the ordinary slime hop.
+  const step = phase % 1.9;
+  if (step < .62) return .30*Math.sin(Math.PI*2*step/.62);
+  if (step < .89) return -.26*Math.sin(Math.PI*(step-.62)/.27);
+  if (step > 1.56) return -.27*Math.sin(Math.PI*(step-1.56)/.34);
+  return .022*Math.sin(phase*4);
+}
+
+function spiderLegs(c,t,dancing,near) {
+  for(let i=0;i<4;i++) {
+    const stride=t*10 + i*Math.PI*.76 + (near?0:Math.PI);
+    const reach=near?1:-1;
+    const kick=dancing?Math.max(0,Math.cos(t*Math.PI*2+reach*Math.PI/2+i*.5)):0;
+    const lift=dancing?kick*5.5:Math.max(0,Math.sin(stride))*2.8;
+    const footX=-7.3+i*4.9 + (near?.9:-1.5) + (dancing?reach*kick*2.4:Math.cos(stride)*2.25);
+    const hipX=-3+i*1.55;
+    const kneeX=hipX+(footX-hipX)*.72;
+    const ground=near?-.5:-1.8;
+    stroke(c,hipX,-6.6,kneeX,-9.4-lift*.52,footX,ground-lift,near?'#24232e':'#493b4b',near?1.67:1.3);
+    stroke(c,hipX,-6.87,kneeX,-9.55-lift*.52,footX,ground-lift-.45,near?'#716273':'#776173',.55);
+  }
+}
+
+function blazeRods(c,time,dancing,front) {
+  for(let ring=0;ring<2;ring++)for(let i=0;i<4;i++) {
+    const angle=time*(dancing?Math.PI*2:ring?2.9:-2.1)+i*Math.PI/2+ring*.76;
+    const z=Math.sin(angle);
+    if((z>=0)!==front) continue;
+    const bx=Math.cos(angle)*(ring?5.25:7.1)-.72;
+    const by=(ring?-11.35:-5.55)+z*1.55+Math.sin(angle*2.1)*.72;
+    cube(c,bx,by,1.48,ring?3.75:4.5,.62,fire);
+    c.fillStyle=ring?'#ffebb1':'#ffc15a';c.fillRect(bx,by+.28,1.22,1.22);
+  }
+}
 function creature(c,id,t,gait,dancing,action) {
-  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait,dancing,action);return; }
+  if (id==='ghast' || id==='magma_cube') { drawNetherCreature(c,id,t,dancing,action); return; }
+  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait,dancing,action,t);return; }
   if(id==='creeper'){
     for(const side of [-1,1]) {
       const tap = dancing ? Math.max(0,side*gait) : 0;
@@ -398,60 +506,92 @@ function creature(c,id,t,gait,dancing,action) {
         c.restore();
       }
     }
-  }else if(id==='slime'||id==='magma_cube'||id==='shulker'){
-    const shell=id==='shulker',hot=id==='magma_cube';
-    const col=shell?purple:hot?red:['#58b388','#aff1a7','#38857b'];
+  }else if(id==='slime'||id==='shulker'){
+    const shell=id==='shulker';
+    const col=shell?purple:['#58b388','#aff1a7','#38857b'];
     const pump = dancing ? Math.cos(t*Math.PI*4) : Math.sin(t*5);
-    c.save();c.scale(1+pump*(dancing?.15:.035),1-pump*(dancing?.17:.065));
-    if(hot){
-      for(let i=0;i<3;i++){cube(c,-5.55,-3.9-i*4.3,12,3.4,2,col);if(i<2)cube(c,-4.9,-4.65-i*4.3,10.9,.85,1,fire);}
-      eyes(c,-2.65,-10.5,5.2,'#ffde65');
-    }else if(shell){
-      cube(c,-5,-4.4,11,4.2,2.4,col);cube(c,-2.3,-9,6.7,5.4,1.2,['#c4c486','#ede5a9','#93946c']);
-      c.save();
-      if (dancing) { c.translate(gait*.95,-Math.abs(gait)*1.5);c.rotate(gait*.10); }
-      cube(c,-5,-13+Math.sin(t*3)*.45,11,4.9,2.4,col);c.restore();eyes(c,-.9,-7.65,2.9);
+    c.save();
+    if(!shell && !dancing){
+      const spring=slimeSpring(t);
+      c.scale(1-spring*.73,1+spring);
+    } else c.scale(1+pump*(dancing?.15:.035),1-pump*(dancing?.17:.065));
+    if(shell){
+      const peek=dancing?.65:Math.max(0,Math.min(1,.48+.9*Math.sin(t*2.12)));
+      cube(c,-5,-4.4,11,4.2,2.4,col);
+      c.save();c.translate(Math.sin(t*2.3)*peek*.8,3.1*(1-peek));
+      cube(c,-2.3,-8.8,6.7,4.45,1.2,['#c4c486','#ede5a9','#93946c']);
+      if(peek>.18) eyes(c,-.72,-7.9,2.9);
+      c.restore();c.save();
+      c.translate(gait*(dancing?.95:.22),-peek*4.8);
+      c.rotate(dancing?gait*.10:-peek*.105);
+      cube(c,-5,-9.25,11,5.15,2.4,col);
+      shape(c,'M-4.4 -7.75L-.65 -7.5 1.3 -6.25 4.85 -6.1',null,'#af76ba',.55);
+      c.restore();
     }else{
       cube(c,-5.5,-12.2,11.8,12,2.4,col);
-      c.fillStyle='#75d397';c.fillRect(-4.25,-11.2,2.4,.9);eyes(c,-2.4,-7.9,5.3);
+      cube(c,-3.5,-9.6,7.8,6.55,1.1,['#79cb91','#9be2aa','#57a381']);
+      c.fillStyle='#b7f4bd';c.fillRect(-4.25,-11.2,2.6,.8);c.fillRect(-4.4,-10.35,.66,1.8);
+      eyes(c,-2.4,-7.9,5.3);
       c.fillStyle='#34826a';c.fillRect(.3,-4.7,2.2,1.12);
     }
     c.restore();
   }else if(id==='spider'){
-    for(let i=0;i<4;i++)for(const side of [-1,1]){
-      const kick = dancing ? Math.max(0,Math.cos(t*Math.PI*2+side*Math.PI/2+i*.5)) : 0;
-      const step = dancing ? side*(1.15+kick*2) : Math.sin(t*10+i*1.9)*1.15;
-      stroke(c,-1.5+i,-7,side*(5.8+i*.4),-10.4+i*1.3-kick*2,side*(7+i*.5)+step,-1.6+i*.35-kick*5.55,'#2d2b3b',1.35);
-    }
-    cube(c,-4.5,-10.7,7,6.2,2.6,coal);cube(c,.85,-8.85,5.7,5.4,1.9,['#473c49','#665462','#312c3e']);
+    spiderLegs(c,t,dancing,false);
+    c.save();c.translate(0,-.52*Math.abs(Math.sin(t*10)));
+    cube(c,-4.5,-10.7,7,6.2,2.6,coal);
+    shape(c,'M-5.15 -10.1L-3.9 -10.9 -2.25 -10.23',null,'#8c6773',.75);
+    c.restore();
+    spiderLegs(c,t,dancing,true);
+    c.save();c.translate(0,-.52*Math.abs(Math.sin(t*10)));
+    cube(c,.85,-8.85,5.7,5.4,1.9,['#473c49','#665462','#312c3e']);
     eyes(c,2,-7.2,2.7,'#ff817a');
+    shape(c,'M3.15 -4.2L3.8 -2.78 4.55 -4.1M5 -4.1L5.7 -2.8 6.13 -4',null,'#d4b8ad',.65);
+    c.restore();
   }else if(id==='blaze'){
-    for(let i=0;i<6;i++){
-      const a=t*(dancing?Math.PI*2:2.7)+i*Math.PI/3;
-      cube(c,Math.cos(a)*4.6-1,-6.1+Math.sin(a)*2.2,1.55,3.75,.7,fire);
-    }
+    blazeRods(c,t,dancing,false);
+    c.save();c.translate(0,Math.sin(t*3.8)*.75);
     cube(c,-3,-14.9,7.4,6.8,2.2,fire);eyes(c,-1.7,-12.6,4.2);
-    shape(c,'M-2 -15L-2.35 -18.5 -1.1 -17.7 .1 -19.2 .8 -16.8 2.75 -17.8 2.6 -15.65Z','#ffca67');
+    c.save();c.translate(0,-15.2);c.scale(1,1+.32*Math.sin(t*7.4));
+    shape(c,'M-2.5 .1L-2.85 -3.65 -1.4 -2.75 -.2 -5 .9 -2.6 2.75 -3.85 2.6 -.3Z','#ffad4b');
+    shape(c,'M-1.4 .12L-.8 -2.3 .2 -1.35 .8 -2.7 1.45 -.15Z','#ffe78d');c.restore();c.restore();
+    blazeRods(c,t,dancing,true);
+    for(let i=0;i<2;i++) {
+      const ember=(t*.88+i*.55)%1;
+      c.save();c.globalAlpha*=Math.sin(ember*Math.PI);
+      c.fillStyle='#ffdf88';c.fillRect((i?3.4:-3.5)+Math.sin(ember*6)*1.22,-15-6.3*ember,.82,1.22);c.restore();
+    }
   }else if(id==='guardian'){
+    const sweep=dancing?gait:Math.sin(t*6.5);
+    c.save();c.translate(-4,-7.5);c.rotate(sweep*.43);
+    shape(c,'M1 -.75L-2.9 -1.75 -6.9 -1.3 -7.15 .6 -2.74 1.4 .75 1.4Z',sea[0],sea[2],.6);
+    c.translate(-6.35,-.15);c.rotate(Math.sin(t*6.5-.85)*.6);
+    shape(c,'M.65 0Q-1.15 -2.1 -3.5 -3.3L-2.85 -.35 -4.12 2.85Q-1.85 2.2 .65 .6Z','#dc9859','#875d47',.56);c.restore();
+    c.save();c.translate(0,-7);c.rotate(sweep*.08);c.translate(0,7);
     for(const [x,y] of [[-4,-9],[-2,-13],[2,-14],[6,-9],[1,-4]]){
-      facet(c,[x,y,x+Math.sign(x)*2,y-3.2,x+1.6,y+1.1],'#e89a58');
+      const flare=.8 + .38*Math.sin(t*3.4);
+      facet(c,[x,y,x+Math.sign(x)*2.4*flare,y-3.3*flare,x+1.6,y+1.1],'#ec9e58');
     }
     cube(c,-4.45,-11.5,9.3,8.4,2,sea);
-    cube(c,-.7,-9.8,4.3,3.6,.55,['#e7dbc2','#fff2ce','#a3aca4']);oval(c,2,-8,1.1,1.15,'#b65442');
-    c.save();c.translate(-4.7,-8);
-    if (dancing) c.rotate(gait*.62);
-    shape(c,'M-.5 -.1L-3.8 -1 -5 -3 -4.3 1.85 -1.7 1.1Z',sea[2]);c.restore();
+    cube(c,-.7,-9.8,4.3,3.6,.55,['#e7dbc2','#fff2ce','#a3aca4']);
+    oval(c,1.55+Math.sin(t*2.4)*.9,-8.1,1.08,1.17,'#b65442');c.restore();
   }else if(id==='ghost'){
-    shape(c,'M-5.8 -3Q-4.2 -5.9 -4.65 -9Q-5.5 -15.2 .1 -15.6Q5.5 -15.4 5 -9.2Q4.8 -5.8 6 -4.4L3.8 -4.9 3.2 -2.4 1 -4 -.4 -1.7 -2.9 -3.45Z','#c5d9e6','#747aab',.8);
-    shape(c,'M-3.5 -9.8Q-3.5 -13.4 -.6 -14',null,'#edf3f5',.75);
-    if (dancing) {
-      for (const side of [-1,1]) {
-        c.save();c.translate(side*3.35,-8.3);c.scale(side,1);c.rotate(-.22-side*gait*.72);
-        shape(c,'M-.45 -1.2Q1.6 -.55 3.12 -2.85Q4 -3.8 4.25 -2.6Q4.75 .6 2 1.85L-.65 2Z','#c5d9e6','#747aab',.55);
-        c.restore();
-      }
+    // The hem and sleeves trail the floating head like a sheet caught in a draught.
+    for(let i=0;i<3;i++){
+      const curl=Math.sin(t*3.6+i*1.2);
+      c.save();c.translate((i-1)*2.9,-6.3);c.rotate(.30+curl*.38);c.scale(1,.8+Math.cos(t*3.6+i)*.17);
+      shape(c,'M-2.1 -.65L2.2 -.45Q2.6 3.15 .9 4.1Q-.38 5.2 -.88 7Q-2.1 5.5 -1.8 3.4Z',
+        i===2?'#b9d5e2':'#b0bcd7','#7e85ae',.5); c.restore();
+    }
+    shape(c,'M-5 -4.5Q-4.2 -6 -4.65 -9Q-5.5 -15.2 .1 -15.6Q5.5 -15.4 5 -9.2Q4.8 -5.8 5.35 -4.3Q2.1 -4.75 1 -3.7Q-.8 -5 -2.55 -3.7Z','#cfdfeb','#747aab',.65);
+    shape(c,'M-3.5 -9.8Q-3.5 -13.4 -.6 -14',null,'#f4f7f5',.78);
+    for(const side of [-1,1]) {
+      c.save();c.translate(side*3.35,-8.3);c.scale(side,1);
+      c.rotate(dancing?-.22-side*gait*.72:.12+Math.sin(t*3+side)*.36);
+      shape(c,'M-.45 -1.2Q1.6 -.55 3.12 -2.85Q4 -3.8 4.25 -2.6Q4.75 .6 2 1.85L-.65 2Z','#c5d9e6','#747aab',.55);
+      c.restore();
     }
     eyes(c,-.9,-10.6,3.6,'#5a597f');
+    oval(c,1,-7.55,.61,.82,'#9290ae');
   }
 }
 export function drawBeast(c,actor,camera,time) {
@@ -464,7 +604,7 @@ export function drawBeast(c,actor,camera,time) {
   const gait=dancing?beat:Math.sin(actor.x*.37)*speed;
   const sizing=actor.type==='enderman'?1.16:actor.type==='spider'?.94:1;
   c.save();c.lineJoin='round';c.lineCap='round';
-  oval(c,x,actor.baseY+actor.h-.4,actor.w*.4,1.05,'rgba(16,24,32,.29)');
+  if (actor.action?.kind !== 'vault') oval(c,x,actor.baseY+actor.h-.4,actor.w*.4,1.05,'rgba(16,24,32,.29)');
   c.translate(x+(dancing?beat*2.55:0),foot-(dancing?Math.abs(beat)*2.4:0));
   c.scale(actor.facing*sizing,sizing);
   if(dancing)c.rotate(beat*.205);
@@ -480,6 +620,6 @@ export function drawBeast(c,actor,camera,time) {
     c.scale(1-fold*.87,1+fold*.15);
     c.globalAlpha*=1-fold*.65;
   }
-  creature(c,actor.type,dancing?danceAge:actor.stun?0:time,gait,dancing,action);
+  creature(c,actor.type,dancing?danceAge:(actor.phase ?? (actor.stun?0:time)),gait,dancing,action);
   c.restore();
 }

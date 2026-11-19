@@ -1,6 +1,7 @@
+import { drawNetherEffects } from './nether-creature-art.js?v=living-worlds-1';
 import { configureBoard } from './display.js';
 import { performanceAge } from './guitar.js?v=encore-1';
-import { drawHero, drawBeast } from './actors-art.js?v=monster-motion-1';
+import { drawHero, drawBeast } from './actors-art.js?v=living-worlds-1';
 import { drawMonsterEffects, drawWarnings } from './monster-action-art.js?v=monster-motion-1';
 import { drawAbility, invisibleOpacity, drawSoundWave, drawSoloNotes, drawEnemyReaction } from './ability-effects.js?v=encore-1';
 import { THEMES, rect, terrainLayer, midgroundLayer, drawDepth } from './world-art.js?v=studio-1';
@@ -137,6 +138,7 @@ export function drawRun(canvas,state) {
   for(const item of state.gems) {
     if(!item.taken && item.x>camera-9 && item.x<camera+WIDTH+9) gem(c,item.x-camera,item.y,time);
   }
+  if (level.id === 'nether') drawNetherEffects(c,state,camera,WIDTH);
   drawWarnings(c,state.enemies,camera,WIDTH);
   drawMonsterEffects(c,state.monsterEffects,camera,WIDTH);
   for(const actor of state.enemies) enemy(c,actor,camera,state);
