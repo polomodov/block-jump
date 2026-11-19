@@ -34,7 +34,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
   const state = {
     level, heroId, player, lives: 3, collected: 0, cooldown: 0, time: 0, status: 'playing',
     gems: level.gems.map(g => ({ ...g, taken: false })), enemies: level.enemies.map(spawnEnemy),
-    checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null,
+    checkpointReached: false, invulnerable: 0, abilityTime: 0, solo: null, guitarStartedAt: null,
   };
   let coyote = 0, jumpBuffer = 0, heldJump = false, heldAbility = false;
 
@@ -42,6 +42,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
     state.lives--;
     state.abilityTime = 0;
     state.solo = null;
+    state.guitarStartedAt = null;
     for (const enemy of state.enemies) enemy.dance = 0;
     if (state.lives === 0) {
       state.status = 'lost';
@@ -193,6 +194,7 @@ export function createRun(levelId = 'temple', heroId = 'kirill') {
       state.abilityTime = powers[heroId];
       state.cooldown = 30;
       if (heroId === 'pasha') {
+        state.guitarStartedAt = state.time;
         state.solo = { x: player.x+player.w/2, y: player.y+player.h/2,
           age: 0, front: FIRST_CHORD, radius: SOLO_RADIUS };
       }

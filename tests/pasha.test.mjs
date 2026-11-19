@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRun } from '../physics.js';
+import { performanceAge } from '../guitar.js';
 
 const frame = 1/120;
 
@@ -111,6 +112,7 @@ test('falling during a solo costs a life, clears the performance and leaves the 
   run.update(frame,{});
   assert.equal(s.lives,2);
   assert.equal(s.solo,null);
+  assert.equal(performanceAge(s),null);
   assert.equal(s.abilityTime,0);
   assert.equal(foe.dance,0);
   assert.ok(s.cooldown>29);
@@ -128,11 +130,13 @@ test('the solo has a thirty-second cooldown and requires a new button press', ()
   run.update(1.3,{ability:true});
   assert.equal(s.solo,null);
   assert.equal(s.abilityTime,0);
+  assert.ok(Math.abs(performanceAge(s) - 1.3) < 1e-7);
   run.update(.1,{});
   run.update(.1,{ability:true});
   assert.equal(s.solo,null);
   run.update(28.5,{ability:true});
   assert.equal(s.cooldown,0);
+  assert.equal(performanceAge(s),null);
   assert.equal(s.solo,null);
   run.update(frame,{});
   run.update(frame,{ability:true});

@@ -1,5 +1,7 @@
 import { configureBoard } from './display.js';
-import { drawHero, drawBeast } from './actors-art.js';
+import { performanceAge } from './guitar.js?v=encore-1';
+import { drawHero, drawBeast } from './actors-art.js?v=encore-1';
+import { drawAbility, invisibleOpacity, drawSoundWave, drawSoloNotes, drawEnemyReaction } from './ability-effects.js?v=encore-1';
 import { THEMES, rect, terrainLayer, midgroundLayer, drawDepth } from './world-art.js?v=studio-1';
 
 const WIDTH=480, HEIGHT=216;
@@ -92,91 +94,14 @@ function flag(c,x,y,t,time) {
   }
 }
 
-const guitarBody=new Path2D('M-5 -1C-4 -2.9 -2.8 -1.6 -2 -2.4C-1 -4 -.3 -3.9 .75 -3.15L2 -1.4C2.5 .2 .1 .4 -.5 1.8C-.9 3.2 -2.5 4.55 -4.05 4.45C-7.8 4.1 -8.15 .2 -5 -1Z');
-
-function drawGuitar(c,x,y,age,facing) {
-  c.save();c.translate(x+.2,y+.55);c.scale(facing,1);
-  c.rotate(Math.sin(age*14)*.025);
-  c.lineCap='round';c.lineJoin='round';
-  c.fillStyle='#d17142';c.strokeStyle='#4d3137';c.lineWidth=.72;
-  c.fill(guitarBody);c.stroke(guitarBody);
-  c.fillStyle='#ffd397';c.beginPath();c.ellipse(-3.35,.45,1.35,1.5,.63,0,Math.PI*2);c.fill();
-  c.fillStyle='#643e37';c.beginPath();c.arc(-3.35,.45,.96,0,Math.PI*2);c.fill();
-  c.beginPath();c.moveTo(-2.75,.1);c.lineTo(5.95,-5.45);c.strokeStyle='#513b39';c.lineWidth=1.9;c.stroke();
-  c.strokeStyle='#f0cc87';c.lineWidth=.52;c.stroke();
-  c.fillStyle='#a6784c';c.translate(6.2,-5.7);c.rotate(-.48);c.fillRect(-1,-.86,2.5,1.65);c.rotate(.48);c.translate(-6.2,5.7);
-  const strum=Math.sin(age*30)*.9;
-  c.fillStyle='#edb48c';c.beginPath();c.ellipse(-2.6,.45+strum,1.1,.8,-.5,0,2*Math.PI);c.fill();
-  c.beginPath();c.ellipse(3.1,-3.6,.72,1,.4,0,2*Math.PI);c.fill();
-  c.restore();
-}
-
-function musicNote(c,x,y,color) {
-  c.save();c.translate(x+1,y+.6);
-  c.strokeStyle='#392a42';c.fillStyle=color;c.lineWidth=1.05;
-  c.beginPath();c.moveTo(2.25,6.05);c.lineTo(2.25,.1);
-  c.quadraticCurveTo(5.8,.5,5.2,3.12);c.quadraticCurveTo(4.45,2.05,3.05,1.97);
-  c.lineTo(3.05,6.25);c.bezierCurveTo(3.05,8.3,-1.55,8.5,-.9,6.28);c.quadraticCurveTo(.05,4.8,2.25,5.45);c.closePath();c.stroke();c.fill();c.restore();
-}
-
-function drawSoundWave(c,solo,camera) {
-  const alpha=Math.max(0,Math.min(1,(.93-solo.age)/.33));
-  if(!alpha) return;
-  const x=solo.x-camera, y=solo.y, radius=solo.front;
-  c.save();
-  c.lineWidth=1.35;c.strokeStyle='#95f6ed';c.globalAlpha=alpha*.71;c.setLineDash([2.35,4.8]);
-  c.beginPath();c.arc(x,y,radius,0,Math.PI*2);c.stroke();
-  c.setLineDash([]);c.globalAlpha=alpha*.16;c.lineWidth=3.6;
-  c.beginPath();c.arc(x,y,Math.max(1,radius-2.65),0,Math.PI*2);c.stroke();
-  c.globalAlpha=alpha;
-  for(const side of [-1,1]) {
-    for(const [angle,color] of [[-.80,'#b3f5dc'],[-.19,'#ffc1dc']]) {
-      const nx=x+side*radius*Math.cos(angle);
-      musicNote(c,nx-2,y+radius*Math.sin(angle)-5,color);
-    }
-  }
-  c.restore();
-}
-
-function playerEffects(c,s,cx,cy,front) {
-  if(s.abilityTime<=0) return;
-  const dir=s.player.facing||1;
-  if(!front && s.heroId==='kirill') {
-    for(let i=0;i<3;i++) rect(c,i ? '#67c6c5':'#c9ffeb',cx-dir*(11+i*4),cy-6+i*3,5-i,1);
-  } else if(front && s.solo) {
-    drawGuitar(c,cx,cy,s.solo.age,dir);
-    const rise=Math.floor(s.solo.age*12)%7;
-    musicNote(c,cx+dir*11-2,cy-17-rise,'#ffbdda');
-  } else if(front && s.heroId==='maxim') {
-    const x=cx+dir*11;
-    rect(c,'#ffe3a2',x,cy-6,3,7); rect(c,'#ffc270',x+dir*3,cy-4,2,5);
-    rect(c,'#fff4cb',x+dir*6,cy-1,3,2);
-  } else if(front && s.heroId==='mom') {
-    for(const [dx,dy] of [[-9,4],[8,-5],[-6,-9]]) {
-      const shift=Math.floor(s.time*5)%3;
-      rect(c,'#e4c0fd',cx+dx,cy+dy-shift,2,1);
-    }
-  } else if(front && s.heroId==='dad') {
-    // Three pixel letters stay recognizable at the internal game resolution.
-    const px=Math.max(2,Math.min(WIDTH-22,cx+5)),py=Math.max(1,cy-23);
-    rect(c,'#3a3340',px,py,20,12); rect(c,'#fff0ba',px+1,py+1,18,10);
-    rect(c,'#fff0ba',px+2,py+11,3,2);
-    const letters=['111 101 1','100 101 1','111 011 1','101 001 0','111 110 1'];
-    letters.forEach((row,j)=>{for(let i=0;i<row.length;i++) if(row[i]==='1') rect(c,'#5d3d42',px+2+i*1.6,py+3+j,1.5,1);});
-  }
-}
-
-function enemy(c,actor,cam,time) {
-  if(!actor.alive)return;
-  const cx=actor.x+actor.w/2-cam, y=actor.y;
-  if(cx < -30 || cx>WIDTH+30)return;
-  drawBeast(c,actor,cam,time);
-  if(actor.dance>0) {
-    const beat=Math.sin(actor.dance*7);
-    musicNote(c,cx+beat*4-1,Math.max(1,y-15+beat*2),'#ffc1dc');
-  } else if(actor.stun>0) {
-    const offset=Math.sin(time*6)*2;
-    rect(c,'#ffe998',cx-5+offset,y-3,3,1);rect(c,'#ffe998',cx+3-offset,y-4,2,2);
+function enemy(c, actor, camera, state) {
+  if (!actor.alive) return;
+  const x = actor.x + actor.w/2 - camera;
+  if (x < -30 || x > WIDTH+30) return;
+  drawBeast(c,actor,camera,state.time);
+  const frightened = state.heroId === 'dad' && state.abilityTime > 0;
+  if (actor.dance > 0 || actor.stun > 0 || frightened) {
+    drawEnemyReaction(c,actor,x,actor.y,state.time,frightened);
   }
 }
 
@@ -211,14 +136,16 @@ export function drawRun(canvas,state) {
   for(const item of state.gems) {
     if(!item.taken && item.x>camera-9 && item.x<camera+WIDTH+9) gem(c,item.x-camera,item.y,time);
   }
-  for(const actor of state.enemies) enemy(c,actor,camera,time);
+  for(const actor of state.enemies) enemy(c,actor,camera,state);
   const cx=hero.x+hero.w/2-camera,cy=hero.y+hero.h/2;
   groundShadow(c,level,hero,camera);
-  playerEffects(c,state,cx,cy,false);
+  drawAbility(c,state,cx,cy,false,WIDTH);
   c.save();
   if(state.invulnerable>0 && Math.floor(time*8)%2===1) c.globalAlpha=.55;
-  if(state.heroId==='mom' && state.abilityTime>0) c.globalAlpha=.48;
+  if(state.heroId==='mom' && state.abilityTime>0) c.globalAlpha*=invisibleOpacity(state);
   drawHero(c,state,camera);
   c.restore();
-  playerEffects(c,state,cx,cy,true);
+  drawAbility(c,state,cx,cy,true,WIDTH);
+  const songAge = performanceAge(state);
+  if (songAge !== null) drawSoloNotes(c,songAge,cx,cy,hero.facing);
 }

@@ -1,7 +1,8 @@
 import { LEVELS } from './levels.js';
-import { createRun } from './physics.js?v=guitar-solo-1';
-import { drawRun } from './renderer.js?v=studio-1';
-import { playSound, setSoundEnabled, stopGuitar } from './audio.js?v=guitar-solo-1';
+import { createRun } from './physics.js?v=encore-1';
+import { drawRun } from './renderer.js?v=encore-1';
+import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
+import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
 
 const byId = id => document.getElementById(id);
 const lobby = byId('lobby');
@@ -178,9 +179,10 @@ function updateHud() {
   if (heroId === 'pasha') {
     let dance = 0;
     for (const enemy of s.enemies) dance = Math.max(dance, enemy.dance);
-    playingMusic = Boolean(s.solo) || dance > 0;
+    playingMusic = performanceAge(s) !== null || dance > 0;
     if (s.solo) { label = 'Гитарное соло!'; seconds = 0; }
     else if (dance > 0) { label = 'Танец'; seconds = Math.ceil(dance); }
+    else if (playingMusic) { label = 'Гитарное соло!'; seconds = 0; }
     else if (cooldown > 0) label = 'Гитара';
   }
   setText(byId('ability-name'), label);
@@ -226,7 +228,7 @@ function animate(time) {
     const { lives, collected, checkpointReached, cooldown, solo } = s;
     const vy = s.player.vy;
     run.update(Math.min(.08, (time - previousTime) / 1000), inputs());
-    if (!solo && s.solo) playSound('guitar');
+    if (!solo && s.solo) playSolo(performanceAge(s));
     if (s.status === 'won') playSound('win');
     else if (s.lives < lives) { stopGuitar(); playSound('hit'); }
     else if (!checkpointReached && s.checkpointReached) playSound('checkpoint');
@@ -246,6 +248,7 @@ function animate(time) {
 function play() {
   if (runDialog.open) runDialog.close();
   phase = 'playing';
+  playSolo(performanceAge(run.state));
   previousTime = undefined;
   board.focus({ preventScroll: true });
   frame = requestAnimationFrame(animate);
@@ -320,12 +323,17 @@ helpDialog.addEventListener('close', () => {
   }
   continueAfterHelp = false;
 });
-soundButton.addEventListener('click', () => {
+soundButton.addEventListener('click', async () => {
   sound = !sound;
-  setSoundEnabled(sound);
+  const ready = setSoundEnabled(sound);
   soundButton.setAttribute('aria-pressed', String(sound));
   soundButton.title = sound ? 'Выключить звук' : 'Включить звук';
-  if (sound) playSound('gem');
+  await ready;
+  if (sound) {
+    const age = phase === 'playing' ? performanceAge(run.state) : null;
+    if (age !== null) playSolo(age);
+    else playSound('gem');
+  }
 });
 
 for (const button of touchButtons) {

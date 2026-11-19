@@ -1,3 +1,5 @@
+import { beat, performanceAge, strokes } from './guitar.js?v=encore-1';
+
 // Illustration coordinates are in game units. The canvas scales the paths at display density.
 const paths = new Map();
 function shape(c, d, fill, edge, width = .55) {
@@ -100,6 +102,95 @@ function arm(c,phase,run,air,ascent,front,h) {
   oval(c,palmX,palmY,1.12,1.08,skin);
 }
 
+// Key the pick and the fretting hand to the same strokes that play the audio.
+const pickPositions = [], fretPositions = [];
+const frets = [7.7,6.15,9.1,7.0];
+let previousFret = frets[strokes[0][1]];
+for (const [index,chord,accent] of strokes) {
+  const time = index * beat;
+  const direction = Number.isInteger(index) ? 1 : -1;
+  const reach = direction * (.55 + .55 * accent);
+  pickPositions.push([time-.09,-reach],[time,0],[time+.09,reach]);
+  if (!fretPositions.length || previousFret !== frets[chord]) {
+    fretPositions.push([time-.17,previousFret],[time-.045,frets[chord]]);
+    previousFret = frets[chord];
+  }
+}
+const lastPick = pickPositions[pickPositions.length-1];
+pickPositions.push([lastPick[0]+.62,lastPick[1]*.55]);
+
+function handPosition(poses,age) {
+  for (let i=1;i<poses.length;i++) {
+    const [end,to] = poses[i];
+    if (age > end) continue;
+    const [start,from] = poses[i-1];
+    const t = Math.max(0,(age-start)/(end-start));
+    return from + (to-from)*t*t*(3-2*t);
+  }
+  return poses[poses.length-1][1];
+}
+
+// The neck, fretting fingers, strumming wrist and pick share the instrument's axes.
+function guitarPose(c, age, h) {
+  const strokePhase = handPosition(pickPositions,age);
+  const chord = handPosition(fretPositions,age);
+  const wristX = -1.75 + strokePhase * .65;
+  const wristY = -.15 + strokePhase * 2.8;
+  shape(c,'M1.6 -15.1Q.8 -11.8 -4.7 -7.4',null,'#382d3c',1.45);
+  c.save();
+  c.translate(-.8,-9.55);
+  c.rotate(-.43 + Math.cos(age*Math.PI*2/beat) * .042);
+
+  // The elbow passes behind the neck, and the fingertips curl over its edge.
+  stroke(c,4.1,-4.15,4.85,1.12,chord,.6,ink,2.9);
+  stroke(c,4.1,-4.15,4.85,1.12,chord,.6,h.shade,2.12);
+  shape(c,'M-7.4 .8C-7.7 -3 -5.3 -5 -2.8 -4.35C-.5 -3.65 -.5 -2.5 1.35 -3.15C3.45 -4 4.7 -3 4.8 -.5C5 1.55 3.45 2.8 1.95 2.45C-.4 1.95 -.35 4.15 -2.9 5.1C-5.9 6.1 -7.65 3.35 -7.4 .8Z','#145762',ink,.9);
+  shape(c,'M-7.1 -.1C-7.1 -3.3 -5.15 -4.6 -3.2 -4.05C-1.35 -3.6 -.7 -2.15 1.3 -2.9C3.8 -4 4.6 -2.15 4.5 -.4C4.5 1.3 3.35 2 1.85 1.88C-.5 1.4 -.7 3.6 -3 4.36C-5.35 5.14 -7.4 2.63 -7.1 -.1Z','#15919a','#ffe9bc',.55);
+  oval(c,-.8,-.2,1.65,1.7,'#ffe4ad');
+  oval(c,-.8,-.2,1.21,1.25,'#483340');
+  shape(c,'M.9 .35Q1.8 1.7 .15 2.55Q-1.15 2.7 -1.6 1.65Q.12 1.62 .9 .35Z','#194f64');
+  shape(c,'M-4.7 -1.05L-3.85 -1.05 -3.85 1.18 -4.8 1.18Z','#583e44');
+  shape(c,'M1.1 -.85L11.13 -.7 11.35 .8 1.1 1.03Z','#654739',ink,.55);
+  shape(c,'M10.95 -.85L13.3 -1.65 15.1 -1.07 14.65 1.62 11.05 .8Z','#ad6144',ink,.65);
+  for (const peg of [12.1,14.0]) {
+    oval(c,peg,-1.68,.44,.63,'#f5e1b5');
+    oval(c,peg-.22,1.57,.44,.63,'#e0c8a4');
+  }
+  for (const fret of [3,5,6.7,8.2,9.55]) {
+    stroke(c,fret,-.64,fret,.04,fret,.75,'#e0b895',.3);
+  }
+  for (const y of [-.38,.23]) {
+    stroke(c,-4.5,y,4.3,y,13.9,y*.72,'#fff0be',.24);
+  }
+  oval(c,chord,.82,1.25,1.06,skin);
+  stroke(c,chord-.65,.55,chord-.72,-.52,chord-.4,-.72,skin,.7);
+  stroke(c,chord+.35,.58,chord+.23,-.39,chord+.49,-.65,'#fbd0a4',.65);
+
+  // Follow through across the whole soundboard rather than wiggling just a fingertip.
+  const elbowX = -3.95 - strokePhase * .6;
+  const elbowY = -2.95 + strokePhase * .56;
+  stroke(c,.3,-5.55,elbowX,elbowY,wristX,wristY,ink,3.35);
+  stroke(c,.3,-5.55,elbowX,elbowY,wristX,wristY,h.jacket,2.45);
+  stroke(c,.15,-5.65,elbowX-.35,elbowY-.4,wristX-.6,wristY-.3,h.lit,.57);
+  oval(c,wristX,wristY,1.14,1.07,skin);
+  c.save();c.translate(wristX+.45,wristY+.56);
+  shape(c,'M0 0L.92 -.16 .54 .72Z','#baffed','#3f7071',.22);
+  c.restore();
+  c.restore();
+}
+
+function powerArm(c,hero,h,amount) {
+  const punch = hero === 'maxim';
+  const elbowX = punch ? -3.3 + 9.6 * amount : -3.85;
+  const elbowY = punch ? -8.75 - 3.0 * amount : -10.75 - amount * .65;
+  const palmX = punch ? -.6 + 14.35 * amount : 4.75;
+  const palmY = punch ? -10.6 - .74 * amount : -17.95;
+  stroke(c,-1.6,-14.2,elbowX,elbowY,palmX,palmY,ink,3.2);
+  stroke(c,-1.6,-14.2,elbowX,elbowY,palmX,palmY,h.jacket,2.35);
+  stroke(c,-1.65,-14.4,elbowX,elbowY-.45,palmX-.2,palmY-.4,h.lit,.45);
+  oval(c,palmX,palmY,punch ? 1.65 : 1.17,punch ? 1.35 : 1.0,skin);
+}
+
 const motion = new WeakMap();
 export function drawHero(c,s,camera) {
   const p=s.player,h=family[s.heroId];
@@ -125,10 +216,30 @@ export function drawHero(c,s,camera) {
   leg(c,m.phase+Math.PI,run,air,ascent,false,h);
   leg(c,m.phase,run,air,ascent,true,h);
   c.translate(0,bob+idle);c.rotate((air?.048*ascent:.064*run));
-  arm(c,m.phase,run,air,ascent,false,h);
+  const musicAge = s.heroId === 'pasha' ? performanceAge(s) : null;
+  const playing = musicAge !== null;
+  const sprint = s.heroId === 'kirill' && s.abilityTime > 0;
+  const punching = s.heroId === 'maxim' && s.abilityTime > 0;
+  const shouting = s.heroId === 'dad' && s.abilityTime > 2.36;
+  if (sprint) c.rotate(.115 * run);
+  if (playing) c.rotate(Math.sin(musicAge * Math.PI * 4) * .042);
+  if (!playing) arm(c,m.phase,run,air,ascent,false,h);
   torso(c,s.heroId,h);
+  c.save();
+  if (playing) {
+    c.translate(0,-15.6);
+    c.rotate(.09 + Math.sin(musicAge * Math.PI * 4) * .095);
+    c.translate(0,15.6);
+  }
   head(c,s.heroId,h,s.time%3.8>3.66);
-  if(!s.solo)arm(c,m.phase+Math.PI,run,air,ascent,true,h);
+  c.restore();
+  if (playing) guitarPose(c,musicAge,h);
+  else if (punching) {
+    const progress = 1 - s.abilityTime / .35;
+    const extend = Math.min(1,progress / .32,(1-progress) / .62);
+    powerArm(c,s.heroId,h,1 - (1-extend)**2);
+  } else if (shouting) powerArm(c,s.heroId,h,Math.sin(s.abilityTime * 12));
+  else arm(c,m.phase+Math.PI,run,air,ascent,true,h);
   c.restore();
   if(since<.19 && p.onGround && m.impact>.52) {
     const k=since/.19;
@@ -160,23 +271,40 @@ const violet=['#574c78','#7d6c9c','#413950'], red=['#a64d37','#de8a47','#6e3634'
 function eyes(c,x,y,gap,color='#272936') {
   c.fillStyle=color;c.fillRect(x,y,1.12,1.5);c.fillRect(x+gap,y,1.1,1.5);
 }
-function humanoid(c,id,gait) {
+function humanoid(c,id,gait,dancing) {
   const bone=id==='skeleton', dark=id==='enderman', pumpkin=id==='pumpkin_guard', witch=id==='witch';
   const face=bone?stone:dark?coal:pumpkin?fire:witch?['#aa8c81','#d3b8a0','#776575']:id==='drowned'?sea:zombie;
   const coat=bone?stone:dark?coal:pumpkin?['#686f46','#a5a060','#414c3e']:witch?purple:teal;
   const pants=bone?stone:dark?coal:pumpkin?red:violet;
   for(const leg of [-1,1]) {
-    const dx=gait*leg*1.85;
-    stroke(c,leg*1.25,-6,leg*1.25+dx*.75,-3.5,leg*1.25+dx,-.8,pants[2],bone||dark?1.05:2.05);
-    cube(c,leg*1.25+dx-.65,-1.55,1.8,1.3,.7,pants);
+    const kick = dancing ? Math.max(0,leg*gait) : 0;
+    const footX = leg*(1.25 + 2.9*kick) + (dancing ? 0 : gait*leg*1.85);
+    const footY = -.8 - kick*3.7;
+    const kneeX = leg*(1.25 + kick*3.55) + (dancing ? 0 : gait*leg*1.38);
+    stroke(c,leg*1.25,-6,kneeX,-3.5-kick*3,footX,footY,pants[2],bone||dark?1.05:2.05);
+    cube(c,footX-.65,footY-.75,1.8,1.3,.7,pants);
   }
   c.save();c.translate(0,-Math.abs(gait)*.46);
   if(witch)shape(c,'M-2.8 -11.7L2 -11.7 4.1 -3Q.5 -2 -4.15 -3.3Z',coat[0],coat[2],.65);
   else cube(c,-2.15,-11.8,4.6,6.5,1.5,coat);
   if(bone) for(let i=0;i<3;i++){c.fillStyle=coal[0];c.fillRect(-1.6,-10.9+i*1.5,3.8,.62);}
   const reach=dark?-.9:-5.9;
-  stroke(c,-2.95,-11.1,-2.7+gait,-8.4,-2.8+gait*2,reach,face[2],dark?1.05:1.62);
-  stroke(c,2.5,-11.1,3.25-gait,-8.3,3.5-gait*1.8,reach,face[0],dark?1.1:1.78);
+  let bowX = 5, bowY = -10;
+  if (dancing) {
+    // Alternate an overhead disco point and a hand pointing toward the floor.
+    const span = dark ? 1.25 : 1;
+    for (const side of [-1,1]) {
+      const high = (1 + side*gait)/2;
+      const wristX = side * (5.65 + 1.1*high)*span;
+      const wristY = -7.15 - high*8.8*span;
+      stroke(c,side*2.65,-11.15,side*(4.8+span*.6),-10.2-high*2.25,wristX,wristY,
+        side===-1 ? face[2] : face[0], dark ? 1.2 : 1.8);
+      if (side===1) { bowX = wristX; bowY = wristY-.6; }
+    }
+  } else {
+    stroke(c,-2.95,-11.1,-2.7+gait,-8.4,-2.8+gait*2,reach,face[2],dark?1.05:1.62);
+    stroke(c,2.5,-11.1,3.25-gait,-8.3,3.5-gait*1.8,reach,face[0],dark?1.1:1.78);
+  }
   if(pumpkin){shape(c,'M-2.1 -10.7L1.8 -8.9M-.35 -11.4L-1.65 -8.4',null,'#cc9c61',.75);}
   cube(c,-2.7,-17.45,6.65,5.65,1.65,face);
   if(pumpkin) {
@@ -194,26 +322,36 @@ function humanoid(c,id,gait) {
     shape(c,'M-2.7 -18L2.3 -17.9',null,'#bf9658',.68);
     oval(c,.5,-14,.72,1.1,'#c7a08d');
   }
-  if(bone)shape(c,'M5 -10Q9 -7.9 4.2 -4.2L5 -10',null,'#b4855a',.67);
+  if (bone) {
+    c.save();c.translate(bowX,bowY);
+    shape(c,'M0 0Q4 2.1 -.8 5.8L0 0',null,'#b4855a',.67);
+    c.restore();
+  }
   c.restore();
 }
-function creature(c,id,t,gait) {
-  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait);return; }
+function creature(c,id,t,gait,dancing) {
+  if(['zombie','drowned','skeleton','pumpkin_guard','enderman','witch'].includes(id)) { humanoid(c,id,gait,dancing);return; }
   if(id==='creeper'){
-    for(const i of [-1,1]) cube(c,i*2.2-1.1+gait*i,-2.8,3,2.55,1.25,moss);
+    for(const side of [-1,1]) {
+      const tap = dancing ? Math.max(0,side*gait) : 0;
+      cube(c,side*2.2-1.1+(dancing?side*tap*2.4:gait*side),-2.8-tap*1.9,3,2.55,1.25,moss);
+    }
     cube(c,-1.5,-11,4.2,8.5,1.65,moss);cube(c,-2.6,-17.4,6.7,6,2,moss);
     eyes(c,-1.7,-15.8,3.7); shape(c,'M.15 -14.55L1.75 -14.55 1.75 -13.65 2.55 -13.65 2.55 -12 1.75 -12 1.75 -12.6 .1 -12.6 .1 -12 -.65 -12 -.65 -13.65 .15 -13.65Z',coal[2]);
     c.fillStyle='#93b86d';c.fillRect(-1,-9.5,1.1,1.15);c.fillRect(1,-6.7,1.3,1.5);
   }else if(id==='slime'||id==='magma_cube'||id==='shulker'){
     const shell=id==='shulker',hot=id==='magma_cube';
     const col=shell?purple:hot?red:['#58b388','#aff1a7','#38857b'];
-    c.save();c.scale(1+Math.sin(t*5)*.035,1-Math.sin(t*5)*.065);
+    const pump = dancing ? Math.cos(t*Math.PI*4) : Math.sin(t*5);
+    c.save();c.scale(1+pump*(dancing?.15:.035),1-pump*(dancing?.17:.065));
     if(hot){
       for(let i=0;i<3;i++){cube(c,-5.55,-3.9-i*4.3,12,3.4,2,col);if(i<2)cube(c,-4.9,-4.65-i*4.3,10.9,.85,1,fire);}
       eyes(c,-2.65,-10.5,5.2,'#ffde65');
     }else if(shell){
       cube(c,-5,-4.4,11,4.2,2.4,col);cube(c,-2.3,-9,6.7,5.4,1.2,['#c4c486','#ede5a9','#93946c']);
-      cube(c,-5,-13+Math.sin(t*3)*.45,11,4.9,2.4,col);eyes(c,-.9,-7.65,2.9);
+      c.save();
+      if (dancing) { c.translate(gait*.95,-Math.abs(gait)*1.5);c.rotate(gait*.10); }
+      cube(c,-5,-13+Math.sin(t*3)*.45,11,4.9,2.4,col);c.restore();eyes(c,-.9,-7.65,2.9);
     }else{
       cube(c,-5.5,-12.2,11.8,12,2.4,col);
       c.fillStyle='#75d397';c.fillRect(-4.25,-11.2,2.4,.9);eyes(c,-2.4,-7.9,5.3);
@@ -222,14 +360,15 @@ function creature(c,id,t,gait) {
     c.restore();
   }else if(id==='spider'){
     for(let i=0;i<4;i++)for(const side of [-1,1]){
-      const step=Math.sin(t*10+i*1.9)*1.15;
-      stroke(c,-1.5+i,-7,side*(5.8+i*.4),-10.4+i*1.3,side*(7+i*.5)+step,-1.6+i*.35,'#2d2b3b',1.35);
+      const kick = dancing ? Math.max(0,Math.cos(t*Math.PI*2+side*Math.PI/2+i*.5)) : 0;
+      const step = dancing ? side*(1.15+kick*2) : Math.sin(t*10+i*1.9)*1.15;
+      stroke(c,-1.5+i,-7,side*(5.8+i*.4),-10.4+i*1.3-kick*2,side*(7+i*.5)+step,-1.6+i*.35-kick*5.55,'#2d2b3b',1.35);
     }
     cube(c,-4.5,-10.7,7,6.2,2.6,coal);cube(c,.85,-8.85,5.7,5.4,1.9,['#473c49','#665462','#312c3e']);
     eyes(c,2,-7.2,2.7,'#ff817a');
   }else if(id==='blaze'){
     for(let i=0;i<6;i++){
-      const a=t*2.7+i*Math.PI/3;
+      const a=t*(dancing?Math.PI*2:2.7)+i*Math.PI/3;
       cube(c,Math.cos(a)*4.6-1,-6.1+Math.sin(a)*2.2,1.55,3.75,.7,fire);
     }
     cube(c,-3,-14.9,7.4,6.8,2.2,fire);eyes(c,-1.7,-12.6,4.2);
@@ -240,26 +379,37 @@ function creature(c,id,t,gait) {
     }
     cube(c,-4.45,-11.5,9.3,8.4,2,sea);
     cube(c,-.7,-9.8,4.3,3.6,.55,['#e7dbc2','#fff2ce','#a3aca4']);oval(c,2,-8,1.1,1.15,'#b65442');
-    shape(c,'M-5.2 -8.1L-8.5 -9 -9.7 -11 -9 -6.15 -6.4 -6.9Z',sea[2]);
+    c.save();c.translate(-4.7,-8);
+    if (dancing) c.rotate(gait*.62);
+    shape(c,'M-.5 -.1L-3.8 -1 -5 -3 -4.3 1.85 -1.7 1.1Z',sea[2]);c.restore();
   }else if(id==='ghost'){
     shape(c,'M-5.8 -3Q-4.2 -5.9 -4.65 -9Q-5.5 -15.2 .1 -15.6Q5.5 -15.4 5 -9.2Q4.8 -5.8 6 -4.4L3.8 -4.9 3.2 -2.4 1 -4 -.4 -1.7 -2.9 -3.45Z','#c5d9e6','#747aab',.8);
     shape(c,'M-3.5 -9.8Q-3.5 -13.4 -.6 -14',null,'#edf3f5',.75);
+    if (dancing) {
+      for (const side of [-1,1]) {
+        c.save();c.translate(side*3.35,-8.3);c.scale(side,1);c.rotate(-.22-side*gait*.72);
+        shape(c,'M-.45 -1.2Q1.6 -.55 3.12 -2.85Q4 -3.8 4.25 -2.6Q4.75 .6 2 1.85L-.65 2Z','#c5d9e6','#747aab',.55);
+        c.restore();
+      }
+    }
     eyes(c,-.9,-10.6,3.6,'#5a597f');
   }
 }
 export function drawBeast(c,actor,camera,time) {
   const x=actor.x+actor.w/2-camera, foot=actor.y+actor.h;
   if(x < -24||x>504||!actor.alive)return;
-  const dancing=actor.dance>0,beat=Math.sin(actor.dance*10.8);
+  const dancing=actor.dance>0;
+  const danceAge = 5 - actor.dance;
+  const beat = Math.sin(danceAge*Math.PI*2);
   const speed=actor.stun?0:Math.min(1,Math.abs(actor.vx)/25);
   const gait=dancing?beat:Math.sin(actor.x*.37)*speed;
   const sizing=actor.type==='enderman'?1.16:actor.type==='spider'?.94:1;
   c.save();c.lineJoin='round';c.lineCap='round';
   oval(c,x,actor.baseY+actor.h-.4,actor.w*.4,1.05,'rgba(16,24,32,.29)');
-  c.translate(x+(dancing?beat*1.55:0),foot-(dancing?Math.abs(beat)*3.1:0));
+  c.translate(x+(dancing?beat*2.55:0),foot-(dancing?Math.abs(beat)*2.4:0));
   c.scale(actor.facing*sizing,sizing);
-  if(dancing)c.rotate(beat*.14);
+  if(dancing)c.rotate(beat*.205);
   if(actor.stun)c.globalAlpha*=.65;
-  creature(c,actor.type,actor.stun?0:time,gait);
+  creature(c,actor.type,dancing?danceAge:actor.stun?0:time,gait,dancing);
   c.restore();
 }
