@@ -3,7 +3,7 @@ import { createRun, restoreRun } from './physics.js?v=offline-1';
 import { drawRun } from './renderer.js?v=dragon-flight-1';
 import { playSound, setSoundEnabled, playSolo } from './audio.js?v=encore-1';
 import { performanceAge, stopGuitar } from './guitar.js?v=encore-1';
-import { bindProgress, loadSavedGame, saveGame, clearSavedGame, addResult } from './progress.js';
+import { beginArcadeRound, bindProgress, loadSavedGame, saveGame, clearSavedGame, addResult } from './progress.js';
 
 const byId = id => document.getElementById(id);
 const lobby = byId('lobby');
@@ -290,6 +290,7 @@ function showArena() {
 }
 
 function start() {
+  beginArcadeRound();
   stopLoop();
   run = createRun(level.id, heroId);
   runId = newRunId();
